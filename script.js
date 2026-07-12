@@ -950,12 +950,21 @@ function buildClaimView(code = ''){
 }
 
 async function claimLink(code, uid){
-  const ref = doc(db, 'claimLinks', code);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) {
-    throw new Error('El enlace ya no está activo.');
+  const directRef = doc(db, 'claimLinks', code);
+  let snap = await getDoc(directRef);
+  let ref = directRef;
+  let data = snap.exists() ? snap.data() : null;
+  if (!data) {
+    const q = query(collection(db, 'claimLinks'), where('code', '==', code));
+    const qSnap = await getDocs(q);
+    if (qSnap.empty) {
+      throw new Error('El enlace ya no está activo.');
+    }
+    const matched = qSnap.docs[0];
+    ref = doc(db, 'claimLinks', matched.id);
+    data = matched.data();
+    snap = matched;
   }
-  const data = snap.data();
   if (data?.claimed) {
     throw new Error('Este enlace ya fue reclamado.');
   }

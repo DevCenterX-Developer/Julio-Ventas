@@ -8,7 +8,7 @@ import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, updateDoc, setDoc,
+  getFirestore, doc, getDoc, updateDoc, setDoc, deleteDoc,
   collection, getDocs
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 
@@ -382,6 +382,7 @@ function renderClaimLinks(){
       <div class="stack-actions">
         <button data-copy-link="${link.id}">Copiar</button>
         <button data-edit-link="${link.id}">Editar</button>
+        <button data-delete-link="${link.id}">Eliminar</button>
       </div>
     </div>
   `).join('');
@@ -398,6 +399,9 @@ function renderCodes(){
       <div>
         <div class="stack-title">${code.client} · ${code.type.toUpperCase()} · ${formatDurationForType(code.type, code.duration)}</div>
         <div class="stack-sub">${code.value} · ${code.amount} keys</div>
+      </div>
+      <div class="stack-actions">
+        <button data-delete-code="${code.id}">Eliminar</button>
       </div>
     </div>
   `).join('');
@@ -481,7 +485,7 @@ async function createClaimLink(){
   const duration = $('claimDurationSelect').value;
   const amount = Math.max(1, parseInt($('claimAmountInput').value, 10) || 1);
   const code = `claim-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-  const ref = doc(collection(db, 'claimLinks'));
+  const ref = doc(db, 'claimLinks', code);
   await setDoc(ref, { type, duration, amount, code, claimed: false, createdAt: new Date() });
   const baseUrl = 'https://juliojl.vercel.app';
   const claimUrl = `${baseUrl}/claim/?claim=${code}`;
@@ -547,6 +551,8 @@ function initPanelView(user){
     const addProxyBatchId = e.target.closest('[data-add-proxy-batch]')?.getAttribute('data-add-proxy-batch');
     const copyLinkId = e.target.closest('[data-copy-link]')?.getAttribute('data-copy-link');
     const editLinkId = e.target.closest('[data-edit-link]')?.getAttribute('data-edit-link');
+    const deleteLinkId = e.target.closest('[data-delete-link]')?.getAttribute('data-delete-link');
+    const deleteCodeId = e.target.closest('[data-delete-code]')?.getAttribute('data-delete-code');
     if (saveId){
       const apkInput = document.querySelector(`[data-apk-input="${saveId}"]`);
       const proxyInput = document.querySelector(`[data-proxy-input="${saveId}"]`);
@@ -593,9 +599,23 @@ function initPanelView(user){
     if (copyLinkId){
       const link = claimLinks.find(item => item.id === copyLinkId);
       if (link) {
-        const url = `https://juliojl.vercel.app/claim/${link.code}`;
+        const url = `https://juliojl.vercel.app/claim/?claim=${link.code}`;
         await navigator.clipboard.writeText(url);
         toast('URL copiada al portapapeles');
+      }
+    }
+    if (deleteLinkId){
+      const link = claimLinks.find(item => item.id === deleteLinkId);
+      if (link && confirm(`¿Eliminar el enlace ${link.code}?`)) {
+        await deleteDoc(doc(db, 'claimLinks', link.id));
+        await loadClaimLinks();
+      }
+    }
+    if (deleteCodeId){
+      const code = promoCodes.find(item => item.id === deleteCodeId);
+      if (code && confirm(`¿Eliminar el código ${code.value}?`)) {
+        await deleteDoc(doc(db, 'promoCodes', code.id));
+        await loadCodes();
       }
     }
     if (editLinkId){
