@@ -416,9 +416,15 @@ footer{ text-align:center; padding:28px; color:var(--muted); font-size:.8rem; bo
 }
 .access-denied h2{ justify-content:center; color:var(--text); }
 
+.admin-nav{ display:flex; gap:8px; padding:12px 30px 0; flex-wrap:wrap; }
+.admin-nav.hidden{ display:none; }
+.admin-nav-btn{ background:transparent; border:1px solid var(--glass-brd); color:var(--muted); border-radius:999px; padding:8px 12px; cursor:pointer; display:flex; align-items:center; gap:6px; }
+.admin-nav-btn.active{ background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#fff; border-color:transparent; }
 .panel-card{ background:var(--glass); backdrop-filter:blur(10px); border:1px solid var(--glass-brd); border-radius:16px; padding:18px; }
 .panel-card-head{ margin-bottom:12px; }
 .panel-card-head h3{ margin:0; font-size:1rem; }
+.admin-section{ display:none; }
+.admin-section.active{ display:block; animation:fadeUp .35s ease; }
 .grid-two{ display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:12px; }
 .field-inline{ display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
 .field-inline.full{ width:100%; }

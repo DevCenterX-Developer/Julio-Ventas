@@ -153,6 +153,40 @@ function getKeyBalances(data = {}){
   return { apkKeys, proxyKeys, total: apkKeys + proxyKeys };
 }
 
+function parseDurationDays(durationValue = ''){
+  if (!durationValue) return 0;
+  if (String(durationValue).toUpperCase() === '1MES') return 30;
+  const match = String(durationValue).match(/(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
+function toDate(value) {
+  if (!value) return null;
+  if (typeof value?.toDate === 'function') return value.toDate();
+  if (value instanceof Date) return value;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getActiveKeys(data = {}, currency = 'apk') {
+  const entries = Array.isArray(data?.activeKeys) ? data.activeKeys : [];
+  const now = Date.now();
+  return entries.filter((entry) => {
+    if (entry?.type && entry.type !== currency) return false;
+    const expiresAt = toDate(entry?.expiresAt);
+    return !expiresAt || expiresAt.getTime() > now;
+  });
+}
+
+function getActiveKeySummary(data = {}, currency = 'apk') {
+  const entries = getActiveKeys(data, currency);
+  return {
+    entries,
+    total: entries.reduce((acc, entry) => acc + (Number(entry?.amount) || 1), 0),
+    firstEntry: entries[0] || null
+  };
+}
+
 function escapeHtml(value = ''){
   return String(value).replace(/[&<>'"]/g, char => ({
     '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;'
@@ -288,7 +322,14 @@ function buildStoreView(){
     <div class="brand">${iconBox('gem',20)} Julio <span class="accent-word">Ventas</span></div>
     <div class="header-right">
       <span class="user-tag" id="userEmail"></span>
-      <div class="pill">${svg('wallet',16)} <span id="keyCount">0</span> Keys</div>
+      <div class="key-summary" id="keySummaryBlock">
+        <button class="key-summary-toggle" id="keySummaryToggle" type="button">
+          <span class="key-pill apk">${svg('key',14)} <span id="apkKeyValue">0</span> APK</span>
+          <span class="key-pill proxy">${svg('key',14)} <span id="proxyKeyValue">0</span> PROXY</span>
+          <span class="key-pill total">${svg('wallet',14)} <span id="totalKeyValue">0</span> Total</span>
+        </button>
+        <div class="key-summary-dropdown" id="keySummaryDropdown"></div>
+      </div>
       <a href="adminui/index.html" id="adminLink" class="iconbtn" style="display:none;">${svg('shield',16)} Admin</a>
       <button class="iconbtn" id="logoutBtn">${svg('logout',16)} Salir</button>
     </div>
@@ -475,7 +516,7 @@ function renderProducts(){
       <div class="product-media">
         ${p.image ? `<img src="${p.image}" alt="${escapeHtml(p.name)}">` : `<div class="icon-wrap">${svg(p.icon, 26)}</div>`}
       </div>
-      <h3>${escapeHtml(p.name)}</h3>
+      <div class="product-name">${escapeHtml(p.name)}</div>
       <div class="price">${svg('key',16)} 1 ${p.currency === 'proxy' ? 'Proxy' : 'APK'}</div>
       <div class="subprice">Canjea con 1 key ${p.currency === 'proxy' ? 'Proxy' : 'APK'}</div>
       <button data-buyproduct="${p.id}" ${canBuy ? '' : 'disabled'}>
@@ -564,10 +605,30 @@ async function refreshUserData(){
   userData = snap.data();
 }
 
+function renderKeySummary(){
+  const balances = getKeyBalances(userData);
+  const activeApk = getActiveKeySummary(userData, 'apk');
+  const activeProxy = getActiveKeySummary(userData, 'proxy');
+  $('apkKeyValue').textContent = balances.apkKeys;
+  $('proxyKeyValue').textContent = balances.proxyKeys;
+  $('totalKeyValue').textContent = balances.total;
+  const dropdown = $('keySummaryDropdown');
+  const activeItems = [];
+  if (activeApk.entries.length) {
+    activeItems.push(...activeApk.entries.map(entry => `<div class="summary-entry"><span class="summary-type apk">APK</span><span>${entry.amount || 1} keys · ${entry.durationDays ? `${entry.durationDays} D` : 'Sin tiempo'}</span></div>`));
+  }
+  if (activeProxy.entries.length) {
+    activeItems.push(...activeProxy.entries.map(entry => `<div class="summary-entry"><span class="summary-type proxy">PROXY</span><span>${entry.amount || 1} keys · ${entry.durationDays ? `${entry.durationDays} D` : 'Sin tiempo'}</span></div>`));
+  }
+  dropdown.innerHTML = activeItems.length
+    ? activeItems.join('')
+    : '<div class="summary-entry empty">Sin keys activas por tiempo.</div>';
+}
+
 async function renderStore(){
   await refreshUserData();
   const balances = getKeyBalances(userData);
-  $('keyCount').textContent = `${balances.apkKeys} APK · ${balances.proxyKeys} PROXY · ${balances.total} TOTAL`;
+  renderKeySummary();
   const currentRank = getRank(balances.total);
   $('userEmail').textContent = `${currentUser?.email ?? ''} · ${currentRank.name}`;
   renderKeys();
@@ -603,25 +664,65 @@ function buyKeyPackage(){
   toast('Se abrió WhatsApp para completar tu pedido.');
 }
 
+async function findMatchingPromoCode(product){
+  const snap = await getDocs(collection(db, 'promoCodes'));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .find((code) => code.active !== false && (
+      code.productId === product.id ||
+      code.productName === product.name ||
+      code.type === product.currency
+    )) || null;
+}
+
 async function buyProduct(id){
   const p = products.find(x => x.id === id);
   if (!p) return;
   await refreshUserData();
   const balances = getKeyBalances(userData);
+  const activeKeySummary = getActiveKeySummary(userData, p.currency === 'proxy' ? 'proxy' : 'apk');
+  const matchingCode = await findMatchingPromoCode(p);
   const availableBalance = p.currency === 'proxy' ? balances.proxyKeys : balances.apkKeys;
-  if (availableBalance < p.cost){
-    toast(`No tienes suficientes keys ${p.currency === 'proxy' ? 'Proxy' : 'APK'}`, true);
+  const canUseBalance = availableBalance >= p.cost;
+  const canUseActiveKey = activeKeySummary.total >= p.cost;
+  const canUseCode = Boolean(matchingCode);
+
+  if (!canUseBalance && !canUseActiveKey && !canUseCode){
+    toast(`No tienes suficientes keys ${p.currency === 'proxy' ? 'Proxy' : 'APK'} o un código activo para este producto.`, true);
     return;
   }
+
   const balanceField = p.currency === 'proxy' ? 'proxyKeys' : 'apkKeys';
-  const updateData = { [balanceField]: increment(-p.cost), keys: increment(-p.cost) };
-  await updateDoc(doc(db, 'users', currentUser.uid), updateData);
+  const updateData = {};
+  if (canUseBalance && !canUseActiveKey && !canUseCode){
+    updateData[balanceField] = increment(-p.cost);
+    updateData.keys = increment(-p.cost);
+  }
+
+  if (canUseActiveKey && !canUseCode) {
+    const nextEntries = [...activeKeySummary.entries];
+    const firstEntry = nextEntries[0];
+    if (firstEntry) {
+      const remaining = (Number(firstEntry.amount) || 1) - p.cost;
+      if (remaining > 0) {
+        firstEntry.amount = remaining;
+      } else {
+        nextEntries.shift();
+      }
+      updateData.activeKeys = nextEntries;
+    }
+  }
+
+  if (Object.keys(updateData).length) {
+    await updateDoc(doc(db, 'users', currentUser.uid), updateData);
+  }
+
   const date = new Date().toLocaleString();
   const keyCode = generateKeyCode(p.currency === 'proxy' ? 'PROXY' : 'APK');
   await addDoc(collection(db, 'users', currentUser.uid, 'inventory'), { name: p.name, icon: p.icon, image: p.image, currency: p.currency, code: keyCode, type:'product', date, createdAt: serverTimestamp() });
   await addDoc(collection(db, 'users', currentUser.uid, 'history'), { type:'product', desc:`Canjeado: ${p.name}`, value: p.cost, currency: p.currency, icon: p.icon, date, createdAt: serverTimestamp() });
   showCelebration('¡Clave generada!', `Tu canje quedó guardado y la clave es: ${keyCode}`, keyCode);
-  toast(`Canjeaste: ${p.name}`);
+  toast(`Canjeaste: ${p.name}${matchingCode ? ' con código activo' : ''}`);
   await renderStore();
 }
 
@@ -639,6 +740,10 @@ function initStoreView(){
   });
 
   $('logoutBtn').addEventListener('click', async () => { await signOut(auth); });
+
+  $('keySummaryToggle').addEventListener('click', () => {
+    $('keySummaryBlock').classList.toggle('open');
+  });
 
   document.addEventListener('click', (e) => {
     const keyCard = e.target.closest('[data-keycard]');
@@ -737,7 +842,25 @@ async function claimLink(code, uid){
     throw new Error('Este enlace ya fue reclamado.');
   }
   const field = data.type === 'proxy' ? 'proxyKeys' : 'apkKeys';
-  await updateDoc(doc(db, 'users', uid), { [field]: increment(data.amount || 1), keys: increment(data.amount || 1) });
+  const durationDays = parseDurationDays(data.duration);
+  const expiresAt = durationDays ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) : null;
+  const userSnap = await getDoc(doc(db, 'users', uid));
+  const userDataCurrent = userSnap.data() || {};
+  const currentActiveKeys = Array.isArray(userDataCurrent.activeKeys) ? userDataCurrent.activeKeys : [];
+  const currentType = String(data.type || 'apk').toLowerCase();
+  const nextActiveKey = {
+    type: currentType,
+    amount: Number(data.amount || 1),
+    durationDays,
+    expiresAt,
+    source: 'claim-link'
+  };
+  const mergedActiveKeys = [...currentActiveKeys.filter(entry => entry?.type !== currentType), nextActiveKey];
+  await updateDoc(doc(db, 'users', uid), {
+    [field]: increment(data.amount || 1),
+    keys: increment(data.amount || 1),
+    activeKeys: mergedActiveKeys
+  });
   await updateDoc(ref, { claimed: true, claimedBy: uid, claimedAt: serverTimestamp() });
   await addDoc(collection(db, 'users', uid, 'history'), { type:'claim-link', desc:`Reclamo de keys: ${data.amount || 1} ${data.type?.toUpperCase() || 'APK'}`, value: data.amount || 1, currency: data.type || 'apk', date: new Date().toLocaleString(), createdAt: serverTimestamp() });
 }

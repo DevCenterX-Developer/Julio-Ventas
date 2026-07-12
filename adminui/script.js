@@ -161,15 +161,22 @@ function buildPanelView(){
     <div class="brand">${iconBox('shield',20)} Julio <span class="accent-word">Ventas</span> · Admin</div>
     <div class="header-right">
       <span class="user-tag" id="adminEmail"></span>
+      <button class="iconbtn" id="menuToggle">${svg('cart',16)} Menú</button>
       <a href="../index.html" class="iconbtn">${svg('cart',16)} Ir a la tienda</a>
       <button class="iconbtn" id="logoutBtn">${svg('logout',16)} Salir</button>
     </div>
   </header>
+  <nav class="admin-nav hidden" id="adminNav">
+    <button class="admin-nav-btn active" data-section="users">${svg('users',16)} Usuarios</button>
+    <button class="admin-nav-btn" data-section="claims">${svg('key',16)} Reclamar URL</button>
+    <button class="admin-nav-btn" data-section="codes">${svg('ticket',16)} Códigos</button>
+  </nav>
   <main>
-    <div class="section-head">
-      <h2>${iconBox('users',18)} Gestión de APK y Proxy</h2>
-      <p class="subtext">Busca un usuario por correo y ajusta manualmente sus balances de APK y Proxy.</p>
-    </div>
+    <section class="admin-section active" id="usersSection">
+      <div class="section-head">
+        <h2>${iconBox('users',18)} Gestión de APK y Proxy</h2>
+        <p class="subtext">Busca un usuario por correo y ajusta manualmente sus balances de APK y Proxy.</p>
+      </div>
 
     <div class="stats-row">
       <div class="stat-card"><div class="icon-wrap">${svg('users',22)}</div><div><div class="num" id="statUsers">0</div><div class="lbl">Usuarios registrados</div></div></div>
@@ -191,89 +198,95 @@ function buildPanelView(){
       </tbody>
     </table>
 
-    <div class="section-head" style="margin-top:34px;">
-      <h2>${iconBox('key',18)} Reclamar URL</h2>
-      <p class="subtext">Crea enlaces para entregar APK o Proxy a un usuario y que lo reclame desde la web.</p>
-    </div>
+    </section>
 
-    <div class="panel-card">
-      <div class="panel-card-head">
-        <h3>Nuevo enlace de reclamo</h3>
+    <section class="admin-section" id="claimsSection">
+      <div class="section-head">
+        <h2>${iconBox('key',18)} Reclamar URL</h2>
+        <p class="subtext">Crea enlaces para entregar APK o Proxy a un usuario y que lo reclame desde la web.</p>
       </div>
-      <div class="grid-two">
-        <label class="field-inline">
-          <span>Tipo</span>
-          <select id="claimTypeSelect">
-            <option value="apk">APK</option>
-            <option value="proxy">Proxy</option>
-          </select>
-        </label>
-        <label class="field-inline">
-          <span>Duración</span>
-          <select id="claimDurationSelect"></select>
-        </label>
-      </div>
-      <label class="field-inline full">
-        <span>Cantidad de keys</span>
-        <input type="number" id="claimAmountInput" min="1" value="1">
-      </label>
-      <button id="createClaimBtn" class="btn">${svg('plus',16)} Crear URL</button>
-      <div class="auth-msg" id="claimCreateMsg"></div>
-    </div>
 
-    <div class="panel-card" style="margin-top:18px;">
-      <div class="panel-card-head">
-        <h3>Enlaces existentes</h3>
+      <div class="panel-card">
+        <div class="panel-card-head">
+          <h3>Nuevo enlace de reclamo</h3>
+        </div>
+        <div class="grid-two">
+          <label class="field-inline">
+            <span>Tipo</span>
+            <select id="claimTypeSelect">
+              <option value="apk">APK</option>
+              <option value="proxy">Proxy</option>
+            </select>
+          </label>
+          <label class="field-inline">
+            <span>Duración</span>
+            <select id="claimDurationSelect"></select>
+          </label>
+        </div>
+        <label class="field-inline full">
+          <span>Cantidad de keys</span>
+          <input type="number" id="claimAmountInput" min="1" value="1">
+        </label>
+        <button id="createClaimBtn" class="btn">${svg('plus',16)} Crear URL</button>
+        <div class="auth-msg" id="claimCreateMsg"></div>
       </div>
-      <div id="claimLinksList" class="stack-list"></div>
-    </div>
 
-    <div class="section-head" style="margin-top:34px;">
-      <h2>${iconBox('ticket',18)} Códigos</h2>
-      <p class="subtext">Gestiona códigos para clientes CUBAN, HG y DRIP con duración cerrada y tipo APK/Proxy.</p>
-    </div>
+      <div class="panel-card" style="margin-top:18px;">
+        <div class="panel-card-head">
+          <h3>Enlaces existentes</h3>
+        </div>
+        <div id="claimLinksList" class="stack-list"></div>
+      </div>
+    </section>
 
-    <div class="panel-card">
-      <div class="panel-card-head">
-        <h3>Agregar código</h3>
+    <section class="admin-section" id="codesSection">
+      <div class="section-head">
+        <h2>${iconBox('ticket',18)} Códigos</h2>
+        <p class="subtext">Gestiona códigos para clientes CUBAN, HG y DRIP con duración cerrada y tipo APK/Proxy.</p>
       </div>
-      <div class="grid-two">
-        <label class="field-inline">
-          <span>Cliente</span>
-          <select id="codeClientSelect"></select>
-        </label>
-        <label class="field-inline">
-          <span>Tipo</span>
-          <select id="codeTypeSelect">
-            <option value="apk">APK</option>
-            <option value="proxy">Proxy</option>
-          </select>
-        </label>
-      </div>
-      <div class="grid-two">
-        <label class="field-inline">
-          <span>Duración</span>
-          <select id="codeDurationSelect"></select>
-        </label>
-        <label class="field-inline">
-          <span>Keys</span>
-          <input type="number" id="codeAmountInput" min="1" value="1">
-        </label>
-      </div>
-      <label class="field-inline full">
-        <span>Código</span>
-        <input type="text" id="codeValueInput" placeholder="Ej: CUBAN-APK-01">
-      </label>
-      <button id="createCodeBtn" class="btn">${svg('plus',16)} Guardar código</button>
-      <div class="auth-msg" id="codeCreateMsg"></div>
-    </div>
 
-    <div class="panel-card" style="margin-top:18px;">
-      <div class="panel-card-head">
-        <h3>Códigos guardados</h3>
+      <div class="panel-card">
+        <div class="panel-card-head">
+          <h3>Agregar código</h3>
+        </div>
+        <div class="grid-two">
+          <label class="field-inline">
+            <span>Cliente</span>
+            <select id="codeClientSelect"></select>
+          </label>
+          <label class="field-inline">
+            <span>Tipo</span>
+            <select id="codeTypeSelect">
+              <option value="apk">APK</option>
+              <option value="proxy">Proxy</option>
+            </select>
+          </label>
+        </div>
+        <div class="grid-two">
+          <label class="field-inline">
+            <span>Duración</span>
+            <select id="codeDurationSelect"></select>
+          </label>
+          <label class="field-inline">
+            <span>Keys</span>
+            <input type="number" id="codeAmountInput" min="1" value="1">
+          </label>
+        </div>
+        <label class="field-inline full">
+          <span>Código</span>
+          <input type="text" id="codeValueInput" placeholder="Ej: CUBAN-APK-01">
+        </label>
+        <button id="createCodeBtn" class="btn">${svg('plus',16)} Guardar código</button>
+        <div class="auth-msg" id="codeCreateMsg"></div>
       </div>
-      <div id="codesList" class="stack-list"></div>
-    </div>
+
+      <div class="panel-card" style="margin-top:18px;">
+        <div class="panel-card-head">
+          <h3>Códigos guardados</h3>
+        </div>
+        <div id="codesList" class="stack-list"></div>
+      </div>
+    </section>
   </main>
   <div class="toast" id="toast"></div>
   `;
@@ -316,8 +329,12 @@ function renderStats(list){
 function populateDurationSelects(){
   const claimDurationSelect = $('claimDurationSelect');
   const codeDurationSelect = $('codeDurationSelect');
-  claimDurationSelect.innerHTML = claimDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('');
-  codeDurationSelect.innerHTML = claimDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('');
+  const applyDurationOptions = (select, type) => {
+    const options = type === 'proxy' ? proxyDurationOptions : claimDurationOptions;
+    select.innerHTML = options.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('');
+  };
+  applyDurationOptions(claimDurationSelect, $('claimTypeSelect').value);
+  applyDurationOptions(codeDurationSelect, $('codeTypeSelect').value);
   $('codeClientSelect').innerHTML = clientOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('');
 }
 
@@ -428,6 +445,25 @@ function initPanelView(user){
 
   $('createClaimBtn').addEventListener('click', createClaimLink);
   $('createCodeBtn').addEventListener('click', createPromoCode);
+  $('claimTypeSelect').addEventListener('change', () => populateDurationSelects());
+  $('codeTypeSelect').addEventListener('change', () => populateDurationSelects());
+
+  $('menuToggle').addEventListener('click', () => {
+    $('adminNav').classList.toggle('hidden');
+  });
+
+  document.querySelectorAll('.admin-nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.admin-nav-btn').forEach(item => item.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.admin-section').forEach(section => section.classList.remove('active'));
+      const target = btn.dataset.section;
+      if (target === 'claims') $('claimsSection').classList.add('active');
+      if (target === 'codes') $('codesSection').classList.add('active');
+      if (target === 'users') $('usersSection').classList.add('active');
+      $('adminNav').classList.add('hidden');
+    });
+  });
 
   document.addEventListener('click', async (e) => {
     const saveId = e.target.closest('[data-save]')?.getAttribute('data-save');
