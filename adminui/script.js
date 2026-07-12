@@ -196,10 +196,18 @@ function renderStats(list){
 }
 
 async function loadUsers(){
-  const snap = await getDocs(collection(db, 'users'));
-  allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.email || '').localeCompare(b.email || ''));
-  renderTable(allUsers);
-  renderStats(allUsers);
+  try {
+    const snap = await getDocs(collection(db, 'users'));
+    allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+    renderTable(allUsers);
+    renderStats(allUsers);
+  } catch (error) {
+    console.error('No se pudieron cargar los usuarios:', error);
+    allUsers = [];
+    renderTable([]);
+    renderStats([]);
+    toast('No fue posible cargar los usuarios. Revisa los permisos de Firestore.', true);
+  }
 }
 
 function populateDurationSelects(){
@@ -386,28 +394,33 @@ async function applyQuickKeyAdjustments(uid, type, adjustments){
     return;
   }
 
-  const snap = await getDoc(doc(db, 'users', uid));
-  const currentData = snap.data() || {};
-  let nextApk = Number(currentData.apkKeys ?? 0);
-  let nextProxy = Number(currentData.proxyKeys ?? 0);
-  const nextActiveKeys = Array.isArray(currentData.activeKeys) ? [...currentData.activeKeys] : [];
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    const currentData = snap.data() || {};
+    let nextApk = Number(currentData.apkKeys ?? 0);
+    let nextProxy = Number(currentData.proxyKeys ?? 0);
+    const nextActiveKeys = Array.isArray(currentData.activeKeys) ? [...currentData.activeKeys] : [];
 
-  validAdjustments.forEach(({ amount, duration }) => {
-    const amountNum = Math.max(0, parseInt(amount, 10) || 0);
-    if (!amountNum || !duration) return;
-    nextActiveKeys.push(buildActiveKeyEntry(type, amountNum, duration));
-    if (type === 'apk') nextApk += amountNum;
-    if (type === 'proxy') nextProxy += amountNum;
-  });
+    validAdjustments.forEach(({ amount, duration }) => {
+      const amountNum = Math.max(0, parseInt(amount, 10) || 0);
+      if (!amountNum || !duration) return;
+      nextActiveKeys.push(buildActiveKeyEntry(type, amountNum, duration));
+      if (type === 'apk') nextApk += amountNum;
+      if (type === 'proxy') nextProxy += amountNum;
+    });
 
-  await updateDoc(doc(db, 'users', uid), {
-    apkKeys: nextApk,
-    proxyKeys: nextProxy,
-    keys: nextApk + nextProxy,
-    activeKeys: nextActiveKeys
-  });
-  toast('Ajustes aplicados correctamente');
-  await loadUsers();
+    await updateDoc(doc(db, 'users', uid), {
+      apkKeys: nextApk,
+      proxyKeys: nextProxy,
+      keys: nextApk + nextProxy,
+      activeKeys: nextActiveKeys
+    });
+    toast('Ajustes aplicados correctamente');
+    await loadUsers();
+  } catch (error) {
+    console.error('No se pudo aplicar el ajuste:', error);
+    toast('No fue posible aplicar el ajuste. Revisa los permisos de Firestore.', true);
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -507,12 +520,17 @@ function fillEditKeyDurationOptions(type){
 
 function openEditKeyModal(uid, type){
   const modal = $('editKeyModal');
-  if (!modal) return;
+  const editUserEl = $('editKeyUser');
+  const editTypeEl = $('editKeyType');
+  if (!modal || !editUserEl || !editTypeEl) {
+    toast('No se pudo abrir el modal de ajustes.', true);
+    return;
+  }
   const user = allUsers.find(u => u.id === uid) || {};
   modal.dataset.userId = uid;
   modal.dataset.keyType = type;
-  $('editKeyUser').textContent = user.email || '(usuario)';
-  $('editKeyType').textContent = type.toUpperCase();
+  editUserEl.textContent = user.email || '(usuario)';
+  editTypeEl.textContent = type.toUpperCase();
   fillEditKeyDurationOptions(type);
   modal.classList.remove('hidden');
 }
