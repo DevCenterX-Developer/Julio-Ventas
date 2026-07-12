@@ -55,9 +55,10 @@ const ICONS = {
   check: `<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>`
 };
 function svg(name, size = 22, cls = "") {
-  return `<svg class="icon ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`;
+  const className = cls ? 'icon ' + cls : 'icon';
+  return '<svg class="' + className + '" width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[name] || '') + '</svg>';
 }
-function iconBox(name, size = 18){ return `<span class="icon-box">${svg(name, size)}</span>`; }
+function iconBox(name, size = 18){ return '<span class="icon-box">' + svg(name, size) + '</span>'; }
 
 // ---------------------------------------------------------------------
 // CATÁLOGO

@@ -48,9 +48,10 @@ const ICONS = {
   settings: `<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M19.4 13.6a7.92 7.92 0 0 0 0-3.2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.9 7.9 0 0 0-2.7-1.6L14 2.2a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.4 2.6a7.9 7.9 0 0 0-2.7 1.6l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6l2.1 1.6a7.92 7.92 0 0 0 0 3.2L2.1 15.2a.5.5 0 0 0-.1.6l2 3.5a.5.5 0 0 0 .6.2l2.5-1a7.9 7.9 0 0 0 2.7 1.6l.4 2.6a.5.5 0 0 0 .5.4h4a.5.5 0 0 0 .5-.4l.4-2.6a7.9 7.9 0 0 0 2.7-1.6l2.5 1a.5.5 0 0 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6l-2.1-1.6z"/>
 };
 function svg(name, size = 22, cls = "") {
-  return `<svg class="icon ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`;
+  const className = cls ? 'icon ' + cls : 'icon';
+  return '<svg class="' + className + '" width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + (ICONS[name] || '') + '</svg>';
 }
-function iconBox(name, size = 18){ return `<span class="icon-box">${svg(name, size)}</span>`; }
+function iconBox(name, size = 18){ return '<span class="icon-box">' + svg(name, size) + '</span>'; }
 
 const $ = (id) => document.getElementById(id);
 let allUsers = [];
