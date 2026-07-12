@@ -427,7 +427,7 @@ function buildStoreView(){
             <option value="">Selecciona una opción</option>
           </select>
         </div>
-        <div class="detail-field">
+        <div class="detail-field hidden">
           <label for="packageNoteModal">Tipo</label>
           <select id="packageNoteModal" class="client-input package-select">
             <option value="">Selecciona una opción</option>
@@ -442,7 +442,7 @@ function buildStoreView(){
           <div class="modal-duration-grid"></div>
         </div>
       </div>
-      <button id="modalSubmitBtn" class="complete-btn">${svg('check',16)} Enviar pedido a WhatsApp</button>
+      <button id="modalSubmitBtn" class="complete-btn" disabled>${svg('check',16)} Enviar pedido a WhatsApp</button>
     </div>
   </div>
   <div id="redeemModal" class="modal hidden">
@@ -508,6 +508,30 @@ function renderKeys(){
   `;
 }
 
+function validatePurchaseModal(){
+  const modal = $('purchaseModal');
+  if (!modal) return;
+  
+  const hasContent = purchaseSelection.packageContent && purchaseSelection.packageContent.trim() !== '';
+  const typeField = $('packageNoteModal')?.closest('.detail-field');
+  const hasClient = purchaseSelection.client && purchaseSelection.client.trim() !== '';
+  const hasType = purchaseSelection.packageNote && purchaseSelection.packageNote.trim() !== '';
+  const submitBtn = $('modalSubmitBtn');
+  
+  const showType = hasContent;
+  const showSubmit = hasContent;
+  const isComplete = hasClient && hasContent && hasType;
+  
+  if (typeField) {
+    typeField.classList.toggle('hidden', !showType);
+  }
+  
+  if (submitBtn) {
+    submitBtn.classList.toggle('hidden', !showSubmit);
+    submitBtn.disabled = !isComplete;
+  }
+}
+
 function openPurchaseModal(sectionId, amount){
   const section = keyOfferSections.find(item => item.id === sectionId) || keyOfferSections[0];
   purchaseSelection.sectionId = sectionId;
@@ -542,6 +566,7 @@ function openPurchaseModal(sectionId, amount){
   `).join('');
 
   modal.classList.remove('hidden');
+  validatePurchaseModal();
 }
 
 function closePurchaseModal(){
@@ -939,15 +964,18 @@ function initStoreView(){
   document.addEventListener('input', (e) => {
     if (e.target.id === 'clientNameModal') {
       purchaseSelection.client = e.target.value;
+      validatePurchaseModal();
     }
     if (e.target.id === 'packageContentSelect') {
       purchaseSelection.packageContent = e.target.value;
+      validatePurchaseModal();
     }
   });
 
   document.addEventListener('change', (e) => {
     if (e.target.id === 'packageNoteModal') {
       purchaseSelection.packageNote = e.target.value;
+      validatePurchaseModal();
     }
     if (e.target.id === 'redeemKeySelect') {
       redemptionSelection.activeKeyIndex = e.target.value ? Number(e.target.value) : null;
@@ -1107,3 +1135,4 @@ onAuthStateChanged(auth, (user) => {
     initAuthView();
   }
 });
+

@@ -446,7 +446,7 @@ button, .btn{ font-family:inherit; }
 }
 .modal-content{
   position:relative;
-  width:min(620px,100%);
+  width:min(900px,95%);
   background:rgba(10,12,20,.96);
   border:1px solid rgba(255,255,255,.08);
   border-radius:24px;
@@ -459,10 +459,16 @@ button, .btn{ font-family:inherit; }
 }
 .modal-body{
   display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:16px;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:18px;
+  align-items:start;
   overflow-y:auto;
   padding-right:6px;
+}
+.modal-body > .detail-field,
+.modal-body > .modal-row,
+.modal-body > .modal-row-tight{
+  min-width:0;
 }
 .modal-body::-webkit-scrollbar{
   width:6px;
@@ -501,7 +507,17 @@ button, .btn{ font-family:inherit; }
   font-size:1.4rem;
   cursor:pointer;
 }
-.modal-body{ display:grid; grid-template-columns:1fr 1fr; gap:16px; overflow-y:auto; padding-right:6px; }
+.detail-field{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  flex:1;
+  min-width:0;
+}
+.detail-field.hidden, .modal-row.hidden{ display:none; }
+.complete-btn.hidden{ display:none; }
+.complete-btn:disabled{ opacity:.5; cursor:not-allowed; }
+.complete-btn:not(:disabled){ cursor:pointer; }
 .modal-row{ display:flex; justify-content:space-between; gap:12px; grid-column:1/-1; }
 .modal-row-tight{ align-items:flex-start; flex-direction:column; grid-column:1/-1; }
 .modal-label{ color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.45px; }
