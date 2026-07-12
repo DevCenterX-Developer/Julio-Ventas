@@ -185,7 +185,7 @@ function renderTable(list){
           </div>
           <div class="batch-actions">
             <button class="admin-batch-btn" data-add-apk-batch="${u.id}">+ entrada APK</button>
-            <button class="iconbtn gear-btn" data-edit-keys="${u.id}:apk" type="button">${svg('settings',14)}</button>
+            <button class="iconbtn gear-btn" data-edit-keys="${u.id}:apk" type="button" title="Ajustar rápido APK">${svg('settings',14)}<span>Ajustar</span></button>
           </div>
         </div>
       </td>
@@ -202,7 +202,7 @@ function renderTable(list){
           </div>
           <div class="batch-actions">
             <button class="admin-batch-btn" data-add-proxy-batch="${u.id}">+ entrada Proxy</button>
-            <button class="iconbtn gear-btn" data-edit-keys="${u.id}:proxy" type="button">${svg('settings',14)}</button>
+            <button class="iconbtn gear-btn" data-edit-keys="${u.id}:proxy" type="button" title="Ajustar rápido Proxy">${svg('settings',14)}<span>Ajustar</span></button>
           </div>
         </div>
       </td>
