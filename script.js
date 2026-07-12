@@ -337,7 +337,7 @@ function initAuthView(){
 function buildStoreView(){
   return `
   <header>
-    <div class="brand">${iconBox('gem',20)} Julio <span class="accent-word">Ventas</span></div>
+    <div class="brand">${iconBox('gem',20)} Julio <span class="accent-word">Ventas</span> <a href="adminui/index.html" id="adminLink" class="iconbtn admin-brand-link" style="display:none;">${svg('shield',14)} Admin</a></div>
     <div class="header-right">
       <span class="user-tag" id="userEmail"></span>
       <div class="key-summary" id="keySummaryBlock">
@@ -570,9 +570,33 @@ function renderProducts(){
   });
 }
 
+function getNextRankProgress(totalKeys){
+  const currentRank = getRank(totalKeys);
+  if (!currentRank || currentRank.name === 'HEROICO') return null;
+  const currentIndex = ranks.findIndex(rank => rank.name === currentRank.name);
+  const nextRank = currentIndex > 0 ? ranks[currentIndex - 1] : null;
+  if (!nextRank) return null;
+  return { nextName: nextRank.name, needed: nextRank.min - totalKeys };
+}
+
 async function renderTierlist(){
   const wrap = $('tierlistWrap');
-  wrap.innerHTML = `<p class="empty">Cargando ranking...</p>`;
+  wrap.innerHTML = `<div class="leaderboard loading">
+      ${Array.from({ length: 4 }).map(() => `
+        <div class="leaderboard-row loading-row">
+          <span class="position skeleton"></span>
+          <div class="player-info">
+            <span class="player-email skeleton"></span>
+            <span class="rank-tag skeleton"></span>
+          </div>
+          <span class="player-keys">
+            <span class="currency-pill skeleton"></span>
+            <span class="currency-pill skeleton"></span>
+            <span class="currency-pill skeleton"></span>
+          </span>
+        </div>
+      `).join('')}
+    </div>`;
   try {
     const snap = await getDocs(collection(db, 'users'));
     const players = snap.docs
@@ -595,6 +619,8 @@ async function renderTierlist(){
 
     wrap.innerHTML = `<div class="leaderboard">${players.map((player, index) => {
       const rank = getRank(player.totalKeys);
+      const progress = getNextRankProgress(player.totalKeys);
+      const progressText = progress ? `<div class="rank-progress">Faltan ${progress.needed} key${progress.needed === 1 ? '' : 's'} para ${progress.nextName}</div>` : '';
       return `
         <div class="leaderboard-row" style="animation-delay:${index * 0.05}s">
           <span class="position">#${index + 1}</span>
@@ -602,11 +628,12 @@ async function renderTierlist(){
             <span class="player-email">${escapeHtml(player.email)}</span>
             <span class="rank-tag ${rank.className}">${rank.name}</span>
           </div>
-          <span class="player-keys">
+          <div class="player-details">
             <span class="currency-pill">${svg('key',14)} ${player.apkKeys} APK</span>
             <span class="currency-pill">${svg('key',14)} ${player.proxyKeys} PROXY</span>
             <span class="currency-pill total">${svg('wallet',14)} ${player.totalKeys} Total</span>
-          </span>
+            ${progressText}
+          </div>
         </div>`;
     }).join('')}</div>
     <p class="rank-legend">Ranking basado en el total de APK + Proxy.</p>`;

@@ -9,7 +9,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
 import {
   getFirestore, doc, getDoc, updateDoc, setDoc, deleteDoc,
-  collection, getDocs
+  collection, getDocs, addDoc
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -168,8 +168,9 @@ function buildPanelView(){
       <button class="iconbtn" id="logoutBtn">${svg('logout',16)} Salir</button>
     </div>
   </header>
-  <nav class="admin-nav hidden" id="adminNav">
+  <nav class="admin-nav" id="adminNav">
     <button class="admin-nav-btn active" data-section="users">${svg('users',16)} Usuarios</button>
+    <button class="admin-nav-btn" data-section="products">${svg('diamond',16)} Productos</button>
     <button class="admin-nav-btn" data-section="claims">${svg('key',16)} Reclamar URL</button>
     <button class="admin-nav-btn" data-section="codes">${svg('ticket',16)} Códigos</button>
   </nav>
@@ -200,6 +201,35 @@ function buildPanelView(){
       </tbody>
     </table>
 
+    </section>
+
+    <section class="admin-section" id="productsSection">
+      <div class="section-head">
+        <h2>${iconBox('diamond',18)} Productos</h2>
+        <p class="subtext">Gestiona los productos que aparecen en la tienda (nombre, imagen, costo, moneda, tier).</p>
+      </div>
+      <div class="panel-card">
+        <div class="panel-card-head"><h3>Nuevo producto</h3></div>
+        <div class="grid-two">
+          <label class="field-inline"><span>Nombre</span><input id="productNameInput" class="client-input" placeholder="Nombre del producto"></label>
+          <label class="field-inline"><span>Imagen (URL)</span><input id="productImageInput" class="client-input" placeholder="https://.../img.jpg"></label>
+        </div>
+        <div class="grid-two">
+          <label class="field-inline"><span>Costo</span><input type="number" id="productCostInput" min="0" value="1" class="client-input"></label>
+          <label class="field-inline"><span>Moneda</span><select id="productCurrencySelect" class="client-input"><option value="apk">APK</option><option value="proxy">Proxy</option></select></label>
+        </div>
+        <div class="grid-two">
+          <label class="field-inline"><span>Tier</span><input id="productTierInput" class="client-input" placeholder="S"></label>
+          <label class="field-inline"><span>Icon (opcional)</span><input id="productIconInput" class="client-input" placeholder="diamond, paw..."></label>
+        </div>
+        <button id="createProductBtn" class="btn">${svg('plus',16)} Crear producto</button>
+        <div class="auth-msg" id="productCreateMsg"></div>
+      </div>
+
+      <div class="panel-card" style="margin-top:18px;">
+        <div class="panel-card-head"><h3>Productos guardados</h3></div>
+        <div id="productsPanelList" class="stack-list"></div>
+      </div>
     </section>
 
     <section class="admin-section" id="claimsSection">
@@ -391,6 +421,13 @@ function renderStats(list){
   $('statAdmins').textContent = list.filter(u => u.isAdmin).length;
 }
 
+async function loadUsers(){
+  const snap = await getDocs(collection(db, 'users'));
+  allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+  renderTable(allUsers);
+  renderStats(allUsers);
+}
+
 function populateDurationSelects(){
   const claimDurationSelect = $('claimDurationSelect');
   const codeDurationSelect = $('codeDurationSelect');
@@ -516,6 +553,86 @@ async function loadCodes(){
   renderCodes();
 }
 
+// ---------- PRODUCTS (admin) ----------
+let productsList = [];
+
+async function loadProducts(){
+  const snap = await getDocs(collection(db, 'products'));
+  productsList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderProductsPanel();
+}
+
+function renderProductsPanel(){
+  const list = $('productsPanelList');
+  if (!list) return;
+  if (!productsList.length) {
+    list.innerHTML = '<div class="empty-card">No hay productos guardados.</div>';
+    return;
+  }
+  list.innerHTML = productsList.map(p => `
+    <div class="stack-item">
+      <div style="display:flex; gap:12px; align-items:center;">
+        <div style="width:64px; height:48px; overflow:hidden; border-radius:8px; background:rgba(0,0,0,.06); display:flex; align-items:center; justify-content:center;">
+          ${p.image ? `<img src="${escapeHtml(p.image)}" style="width:100%; height:100%; object-fit:cover;">` : svg(p.icon || 'box',28)}
+        </div>
+        <div>
+          <div class="stack-title">${escapeHtml(p.name)} · ${p.currency?.toUpperCase() || ''} · ${p.cost || 0}</div>
+          <div class="stack-sub">Tier: ${escapeHtml(p.tier || '')} · ID: ${p.id}</div>
+        </div>
+      </div>
+      <div class="stack-actions">
+        <button data-edit-product="${p.id}">Editar</button>
+        <button data-delete-product="${p.id}">Eliminar</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function createProduct(){
+  const btn = $('createProductBtn');
+  const editingId = btn?.dataset?.editing || null;
+  const name = String($('productNameInput').value || '').trim();
+  const image = String($('productImageInput').value || '').trim();
+  const cost = Number($('productCostInput').value || 0);
+  const currency = String($('productCurrencySelect').value || 'apk');
+  const tier = String($('productTierInput').value || '').trim();
+  const icon = String($('productIconInput').value || '').trim();
+  if (!name) {
+    $('productCreateMsg').className = 'auth-msg error';
+    $('productCreateMsg').textContent = 'Nombre requerido.';
+    return;
+  }
+  const payload = { name, image, cost, currency, tier, icon, updatedAt: new Date() };
+  if (editingId){
+    await updateProduct(editingId, payload);
+    btn.textContent = `${svg('plus',16)} Crear producto`;
+    delete btn.dataset.editing;
+    $('productCreateMsg').className = 'auth-msg ok';
+    $('productCreateMsg').textContent = 'Producto actualizado.';
+  } else {
+    await addDoc(collection(db, 'products'), { ...payload, createdAt: new Date() });
+    $('productCreateMsg').className = 'auth-msg ok';
+    $('productCreateMsg').textContent = 'Producto creado.';
+  }
+  $('productNameInput').value = '';
+  $('productImageInput').value = '';
+  $('productCostInput').value = '1';
+  $('productTierInput').value = '';
+  $('productIconInput').value = '';
+  await loadProducts();
+}
+
+async function updateProduct(id, data){
+  await updateDoc(doc(db, 'products', id), data);
+  await loadProducts();
+}
+
+async function deleteProduct(id){
+  if (!confirm('Eliminar producto?')) return;
+  await deleteDoc(doc(db, 'products', id));
+  await loadProducts();
+}
+
 async function createClaimLink(){
   const type = $('claimTypeSelect').value;
   const duration = $('claimDurationSelect').value;
@@ -564,18 +681,28 @@ function initPanelView(user){
   $('adminEmail').textContent = user.email;
   populateDurationSelects();
   renderCodeValueFields(Number($('codeAmountInput').value) || 1);
+  if (window.innerWidth < 900) $('adminNav').classList.add('hidden');
   loadUsers();
+  loadProducts();
   loadClaimLinks();
   loadCodes();
 
   $('createClaimBtn').addEventListener('click', createClaimLink);
   $('createCodeBtn').addEventListener('click', createPromoCode);
+  $('createProductBtn').addEventListener('click', createProduct);
   $('claimTypeSelect').addEventListener('change', () => populateDurationSelects());
   $('codeTypeSelect').addEventListener('change', () => populateDurationSelects());
   $('codeAmountInput').addEventListener('input', () => renderCodeValueFields(Number($('codeAmountInput').value) || 1));
 
   $('menuToggle').addEventListener('click', () => {
     $('adminNav').classList.toggle('hidden');
+  });
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 900) {
+      $('adminNav').classList.remove('hidden');
+    } else {
+      $('adminNav').classList.add('hidden');
+    }
   });
 
   document.querySelectorAll('.admin-nav-btn').forEach(btn => {
@@ -587,6 +714,7 @@ function initPanelView(user){
       if (target === 'claims') $('claimsSection').classList.add('active');
       if (target === 'codes') $('codesSection').classList.add('active');
       if (target === 'users') $('usersSection').classList.add('active');
+      if (target === 'products') $('productsSection').classList.add('active');
       $('adminNav').classList.add('hidden');
     });
   });
@@ -605,6 +733,9 @@ function initPanelView(user){
     const editLinkId = e.target.closest('[data-edit-link]')?.getAttribute('data-edit-link');
     const deleteLinkId = e.target.closest('[data-delete-link]')?.getAttribute('data-delete-link');
     const deleteCodeId = e.target.closest('[data-delete-code]')?.getAttribute('data-delete-code');
+    const editProductId = e.target.closest('[data-edit-product]')?.getAttribute('data-edit-product');
+    const deleteProductId = e.target.closest('[data-delete-product]')?.getAttribute('data-delete-product');
+
     if (saveId){
       const apkInput = document.querySelector(`[data-apk-input="${saveId}"]`);
       const proxyInput = document.querySelector(`[data-proxy-input="${saveId}"]`);
@@ -682,6 +813,27 @@ function initPanelView(user){
         await deleteDoc(doc(db, 'promoCodes', code.id));
         await loadCodes();
       }
+    }
+    if (deleteProductId){
+      await deleteProduct(deleteProductId);
+      return;
+    }
+    if (editProductId){
+      const p = productsList.find(x => x.id === editProductId);
+      if (p){
+        $('productNameInput').value = p.name || '';
+        $('productImageInput').value = p.image || '';
+        $('productCostInput').value = p.cost || 1;
+        $('productCurrencySelect').value = p.currency || 'apk';
+        $('productTierInput').value = p.tier || '';
+        $('productIconInput').value = p.icon || '';
+        const btn = $('createProductBtn');
+        btn.textContent = 'Guardar cambios';
+        btn.dataset.editing = editProductId;
+        $('productCreateMsg').className = 'auth-msg';
+        $('productCreateMsg').textContent = 'Editando producto...';
+      }
+      return;
     }
     if (editLinkId){
       const link = claimLinks.find(item => item.id === editLinkId);
