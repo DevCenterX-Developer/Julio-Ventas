@@ -113,10 +113,12 @@ const products = [
 const CLAIM_BASE_URL = 'https://juliojl.vercel.app';
 
 function getClaimCodeFromLocation(){
+  const query = new URLSearchParams(window.location.search);
+  const fromQuery = query.get('claim') || query.get('code') || '';
+  if (fromQuery) return fromQuery;
   const pathParts = window.location.pathname.split('/').filter(Boolean);
   if (pathParts[0] === 'claim' && pathParts[1]) return pathParts[1];
-  const query = new URLSearchParams(window.location.search);
-  return query.get('claim') || query.get('code') || '';
+  return '';
 }
 
 function generateKeyCode(type = 'APK'){
@@ -980,8 +982,7 @@ function initClaimView(){
   $('app').innerHTML = buildClaimView(currentClaimCode);
   const form = $('claimAuthForm');
   const msg = $('claimMsg');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  const runClaim = async (uid) => {
     const code = $('claimCodeInput').value.trim();
     if (!code) {
       msg.className = 'auth-msg error';
@@ -989,13 +990,31 @@ function initClaimView(){
       return;
     }
     try {
-      const cred = await signInWithEmailAndPassword(auth, $('claimEmail').value.trim(), $('claimPassword').value);
-      await claimLink(code, cred.user.uid);
+      msg.className = 'auth-msg';
+      msg.innerHTML = '<span class="spinner"></span> Procesando reclamo...';
+      await claimLink(code, uid);
       msg.className = 'auth-msg ok';
       msg.innerHTML = svg('check',16) + ' ¡Keys reclamadas correctamente!';
     } catch (err) {
       msg.className = 'auth-msg error';
       msg.innerHTML = svg('alert',16) + ' ' + (err.message || 'No se pudo reclamar.');
+    }
+  };
+
+  if (currentUser && currentClaimCode) {
+    runClaim(currentUser.uid);
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = $('claimEmail').value.trim();
+    const password = $('claimPassword').value;
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      await runClaim(cred.user.uid);
+    } catch (err) {
+      msg.className = 'auth-msg error';
+      msg.innerHTML = svg('alert',16) + ' ' + (err.message || 'No se pudo iniciar sesión.');
     }
   });
 }

@@ -411,7 +411,7 @@ async function createClaimLink(){
   const ref = doc(collection(db, 'claimLinks'));
   await setDoc(ref, { type, duration, amount, code, claimed: false, createdAt: new Date() });
   const baseUrl = 'https://juliojl.vercel.app';
-  const claimUrl = `${baseUrl}/claim/${code}`;
+  const claimUrl = `${baseUrl}/claim/?claim=${code}`;
   await navigator.clipboard.writeText(claimUrl);
   $('claimCreateMsg').className = 'auth-msg ok';
   $('claimCreateMsg').innerHTML = svg('check',16) + ' URL creada y copiada: ' + claimUrl;
