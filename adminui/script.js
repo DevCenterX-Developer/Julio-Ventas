@@ -360,8 +360,7 @@ function collectBatchEntries(uid, type){
 async function applyQuickKeyAdjustment(uid, type, amount, durationValue){
   const amountNum = Math.max(0, parseInt(amount, 10) || 0);
   if (!amountNum || !durationValue) {
-    toast('Completa la cantidad y la duración.', true);
-    return;
+    return null;
   }
 
   const snap = await getDoc(doc(db, 'users', uid));
@@ -373,8 +372,33 @@ async function applyQuickKeyAdjustment(uid, type, amount, durationValue){
 
   nextActiveKeys.push(entry);
 
-  const nextApk = type === 'apk' ? currentApk + amountNum : currentApk;
-  const nextProxy = type === 'proxy' ? currentProxy + amountNum : currentProxy;
+  return {
+    nextApk: type === 'apk' ? currentApk + amountNum : currentApk,
+    nextProxy: type === 'proxy' ? currentProxy + amountNum : currentProxy,
+    nextActiveKeys
+  };
+}
+
+async function applyQuickKeyAdjustments(uid, type, adjustments){
+  const validAdjustments = adjustments.filter(item => Number(item.amount) > 0 && item.duration);
+  if (!validAdjustments.length) {
+    toast('Agrega al menos una cantidad para aplicar el ajuste.', true);
+    return;
+  }
+
+  const snap = await getDoc(doc(db, 'users', uid));
+  const currentData = snap.data() || {};
+  let nextApk = Number(currentData.apkKeys ?? 0);
+  let nextProxy = Number(currentData.proxyKeys ?? 0);
+  const nextActiveKeys = Array.isArray(currentData.activeKeys) ? [...currentData.activeKeys] : [];
+
+  validAdjustments.forEach(({ amount, duration }) => {
+    const amountNum = Math.max(0, parseInt(amount, 10) || 0);
+    if (!amountNum || !duration) return;
+    nextActiveKeys.push(buildActiveKeyEntry(type, amountNum, duration));
+    if (type === 'apk') nextApk += amountNum;
+    if (type === 'proxy') nextProxy += amountNum;
+  });
 
   await updateDoc(doc(db, 'users', uid), {
     apkKeys: nextApk,
@@ -382,7 +406,7 @@ async function applyQuickKeyAdjustment(uid, type, amount, durationValue){
     keys: nextApk + nextProxy,
     activeKeys: nextActiveKeys
   });
-  toast('Ajuste aplicado correctamente');
+  toast('Ajustes aplicados correctamente');
   await loadUsers();
 }
 
@@ -471,7 +495,14 @@ async function deleteProduct(id){
 // ---------------------------------------------------------------------
 function fillEditKeyDurationOptions(type){
   const options = type === 'proxy' ? proxyDurationOptions : claimDurationOptions;
-  $('editKeyDuration').innerHTML = options.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('');
+  const container = $('editKeyDurationFields');
+  if (!container) return;
+  container.innerHTML = options.map(opt => `
+    <div class="duration-row">
+      <label class="duration-label">${escapeHtml(opt.label)}</label>
+      <input type="number" min="0" value="0" data-edit-duration-value="${opt.value}" placeholder="0">
+    </div>
+  `).join('');
 }
 
 function openEditKeyModal(uid, type){
@@ -554,10 +585,14 @@ function wirePanelEvents(){
       const modal = $('editKeyModal');
       const uid = modal?.dataset?.userId;
       const type = modal?.dataset?.keyType;
-      const amount = parseInt($('editKeyAmount').value, 10) || 1;
-      const duration = $('editKeyDuration').value;
-      if (uid && type && duration) {
-        await applyQuickKeyAdjustment(uid, type, amount, duration);
+      const adjustments = Array.from(document.querySelectorAll('#editKeyDurationFields .duration-row'))
+        .map((row) => ({
+          amount: row.querySelector('input')?.value || '0',
+          duration: row.querySelector('input')?.dataset?.editDurationValue || ''
+        }))
+        .filter(item => item.duration);
+      if (uid && type) {
+        await applyQuickKeyAdjustments(uid, type, adjustments);
         closeEditKeyModal();
       }
       return;
