@@ -220,8 +220,7 @@ let purchaseSelection = {
   amount: 1,
   durationDays: null,
   client: '',
-  packageContent: '',
-  packageNote: ''
+  packageContent: ''
 };
 let redemptionSelection = {
   productId: null,
@@ -428,15 +427,6 @@ function buildStoreView(){
             <option value="">Selecciona una opción</option>
           </select>
         </div>
-        <div class="detail-field hidden">
-          <label for="packageNoteModal">Tipo</label>
-          <select id="packageNoteModal" class="client-input package-select">
-            <option value="">Selecciona una opción</option>
-            <option value="Drip">Drip</option>
-            <option value="Cuban">Cuban</option>
-            <option value="HG">HG</option>
-          </select>
-        </div>
         <div class="modal-divider"></div>
         <div class="modal-row modal-row-tight">
           <span class="modal-label">Duración</span>
@@ -514,17 +504,10 @@ function validatePurchaseModal(){
   if (!modal) return;
   
   const hasContent = purchaseSelection.packageContent && purchaseSelection.packageContent.trim() !== '';
-  const typeField = $('packageNoteModal')?.closest('.detail-field');
   const hasClient = purchaseSelection.client && purchaseSelection.client.trim() !== '';
-  const hasType = purchaseSelection.packageNote && purchaseSelection.packageNote.trim() !== '';
   const submitBtn = $('modalSubmitBtn');
   
-  const showType = hasContent;
-  const isComplete = hasClient && hasContent && hasType;
-  
-  if (typeField) {
-    typeField.classList.toggle('hidden', !showType);
-  }
+  const isComplete = hasClient && hasContent;
   
   if (submitBtn) {
     submitBtn.classList.remove('hidden');
@@ -555,8 +538,6 @@ function openPurchaseModal(sectionId, amount){
   const packageContentSelect = $('packageContentSelect');
   packageContentSelect.innerHTML = `<option value="">Selecciona una opción</option>${availableOptions.map(option => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join('')}`;
   packageContentSelect.value = purchaseSelection.packageContent || '';
-  const packageNoteSelect = $('packageNoteModal');
-  packageNoteSelect.value = purchaseSelection.packageNote || '';
 
   const durationGrid = modal.querySelector('.modal-duration-grid');
   durationGrid.innerHTML = section.durationOptions.map(option => `
@@ -763,8 +744,7 @@ function buyKeyPackage(){
   const selectedOption = section.durationOptions.find(option => option.days === purchaseSelection.durationDays) || section.durationOptions[0];
   const durationLabel = getKeyDurationLabel(selectedOption.days);
   const contentText = purchaseSelection.packageContent ? ` Contenido: ${purchaseSelection.packageContent}.` : ' Contenido: Sin especificar.';
-  const noteText = purchaseSelection.packageNote ? ` Tipo: ${purchaseSelection.packageNote.trim()}.` : '';
-  const message = `Hola Julio, quiero ${amount} key${amount > 1 ? 's' : ''} de ${section.title.toUpperCase()} (${section.subtitle}) para el cliente ${client}. Duración: ${durationLabel}. Precio: ${money(selectedOption.price)} USD.${contentText}${noteText}`;
+  const message = `Hola Julio, quiero ${amount} key${amount > 1 ? 's' : ''} de ${section.title.toUpperCase()} (${section.subtitle}) para el cliente ${client}. Duración: ${durationLabel}. Precio: ${money(selectedOption.price)} USD.${contentText}`;
   const waLink = `https://wa.me/+573135875113?text=${encodeURIComponent(message)}`;
 
   window.open(waLink, '_blank', 'noopener,noreferrer');
@@ -974,10 +954,6 @@ function initStoreView(){
   });
 
   document.addEventListener('change', (e) => {
-    if (e.target.id === 'packageNoteModal') {
-      purchaseSelection.packageNote = e.target.value;
-      validatePurchaseModal();
-    }
     if (e.target.id === 'redeemKeySelect') {
       redemptionSelection.activeKeyIndex = e.target.value ? Number(e.target.value) : null;
     }

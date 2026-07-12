@@ -303,8 +303,18 @@ button, .btn{ font-family:inherit; }
 }
 .purchase-grid-cards{
   display:grid;
-  grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
   gap:20px;
+}
+@media (min-width: 1100px) {
+  .purchase-shell{
+    flex-direction:row;
+    align-items:flex-start;
+  }
+  .purchase-category{
+    flex:1;
+    max-width:48%;
+  }
 }
 .purchase-card{
   display:flex;

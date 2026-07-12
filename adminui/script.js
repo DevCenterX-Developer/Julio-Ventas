@@ -1,3 +1,4 @@
+// @ts-nocheck
 // ======================================================================
 // JULIO VENTAS — adminui/script.js
 // Panel exclusivo para administradores: gestión de Keys por usuario
