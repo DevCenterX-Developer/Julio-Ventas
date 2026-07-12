@@ -174,40 +174,15 @@ function renderTable(list){
         : `<span class="role-tag user">${svg('user',13)} Usuario</span>`}</td>
       <td>
         <div class="admin-balance-field">
-          <input type="number" min="0" value="${apkValue}" data-apk-input="${u.id}">
-          <div class="admin-batch-list" data-apk-batch-list="${u.id}">
-            <div class="admin-batch-row">
-              <input type="number" min="0" value="0" data-apk-batch-amount="${u.id}" data-batch-index="0">
-              <select data-apk-batch-duration="${u.id}" data-batch-index="0">
-                ${claimDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-          <div class="batch-actions">
-            <button class="admin-batch-btn" data-add-apk-batch="${u.id}">+ entrada APK</button>
-            <button class="iconbtn gear-btn" data-edit-keys="${u.id}:apk" type="button" title="Ajustar rápido APK">${svg('settings',14)}<span>Ajustar</span></button>
-          </div>
+          <div class="admin-balance-pill">Saldo actual: ${apkValue}</div>
+          <button class="iconbtn gear-btn" data-edit-keys="${u.id}:apk" type="button" title="Ajustar rápido APK">${svg('settings',14)}<span>Ajustar</span></button>
         </div>
       </td>
       <td>
         <div class="admin-balance-field">
-          <input type="number" min="0" value="${proxyValue}" data-proxy-input="${u.id}">
-          <div class="admin-batch-list" data-proxy-batch-list="${u.id}">
-            <div class="admin-batch-row">
-              <input type="number" min="0" value="0" data-proxy-batch-amount="${u.id}" data-batch-index="0">
-              <select data-proxy-batch-duration="${u.id}" data-batch-index="0">
-                ${proxyDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-          <div class="batch-actions">
-            <button class="admin-batch-btn" data-add-proxy-batch="${u.id}">+ entrada Proxy</button>
-            <button class="iconbtn gear-btn" data-edit-keys="${u.id}:proxy" type="button" title="Ajustar rápido Proxy">${svg('settings',14)}<span>Ajustar</span></button>
-          </div>
+          <div class="admin-balance-pill">Saldo actual: ${proxyValue}</div>
+          <button class="iconbtn gear-btn" data-edit-keys="${u.id}:proxy" type="button" title="Ajustar rápido Proxy">${svg('settings',14)}<span>Ajustar</span></button>
         </div>
-      </td>
-      <td class="row-actions">
-        <button data-save="${u.id}" class="save-only">${svg('save',14)} Guardar</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -382,25 +357,32 @@ function collectBatchEntries(uid, type){
   }).filter(Boolean);
 }
 
-async function saveKeys(uid, apkValue, proxyValue){
-  const apkNum = Math.max(0, parseInt(apkValue, 10) || 0);
-  const proxyNum = Math.max(0, parseInt(proxyValue, 10) || 0);
+async function applyQuickKeyAdjustment(uid, type, amount, durationValue){
+  const amountNum = Math.max(0, parseInt(amount, 10) || 0);
+  if (!amountNum || !durationValue) {
+    toast('Completa la cantidad y la duración.', true);
+    return;
+  }
 
   const snap = await getDoc(doc(db, 'users', uid));
   const currentData = snap.data() || {};
+  const currentApk = Number(currentData.apkKeys ?? 0);
+  const currentProxy = Number(currentData.proxyKeys ?? 0);
   const nextActiveKeys = Array.isArray(currentData.activeKeys) ? [...currentData.activeKeys] : [];
-  const apkEntries = collectBatchEntries(uid, 'apk');
-  const proxyEntries = collectBatchEntries(uid, 'proxy');
+  const entry = buildActiveKeyEntry(type, amountNum, durationValue);
 
-  nextActiveKeys.push(...apkEntries, ...proxyEntries);
+  nextActiveKeys.push(entry);
+
+  const nextApk = type === 'apk' ? currentApk + amountNum : currentApk;
+  const nextProxy = type === 'proxy' ? currentProxy + amountNum : currentProxy;
 
   await updateDoc(doc(db, 'users', uid), {
-    apkKeys: apkNum,
-    proxyKeys: proxyNum,
-    keys: apkNum + proxyNum,
+    apkKeys: nextApk,
+    proxyKeys: nextProxy,
+    keys: nextApk + nextProxy,
     activeKeys: nextActiveKeys
   });
-  toast('Balances y keys activas actualizados correctamente');
+  toast('Ajuste aplicado correctamente');
   await loadUsers();
 }
 
@@ -511,31 +493,6 @@ function closeEditKeyModal(){
   modal.classList.add('hidden');
 }
 
-function applyEditKeyModal(){
-  const modal = $('editKeyModal');
-  if (!modal) return;
-  const uid = modal.dataset.userId;
-  const type = modal.dataset.keyType;
-  const amount = parseInt($('editKeyAmount').value, 10) || 1;
-  const duration = $('editKeyDuration').value;
-  if (!uid || !duration) return;
-  const list = document.querySelector(`[data-${type}-batch-list="${uid}"]`);
-  if (!list) return;
-  const index = list.querySelectorAll('.admin-batch-row').length;
-  const options = (type === 'proxy' ? proxyDurationOptions : claimDurationOptions)
-    .map(opt => `<option value="${opt.value}">${opt.label}</option>`)
-    .join('');
-  const row = document.createElement('div');
-  row.className = 'admin-batch-row';
-  row.innerHTML = `
-    <input type="number" min="0" value="${amount}" data-${type}-batch-amount="${uid}" data-batch-index="${index}">
-    <select data-${type}-batch-duration="${uid}" data-batch-index="${index}">
-      ${options}
-    </select>`;
-  list.appendChild(row);
-  closeEditKeyModal();
-}
-
 // ---------------------------------------------------------------------
 // PANEL: EVENTOS (se registran una sola vez, el HTML ya existe siempre)
 // ---------------------------------------------------------------------
@@ -573,9 +530,6 @@ function wirePanelEvents(){
   });
 
   document.addEventListener('click', async (e) => {
-    const saveId = e.target.closest('[data-save]')?.getAttribute('data-save');
-    const addApkBatchId = e.target.closest('[data-add-apk-batch]')?.getAttribute('data-add-apk-batch');
-    const addProxyBatchId = e.target.closest('[data-add-proxy-batch]')?.getAttribute('data-add-proxy-batch');
     const editKeysTarget = e.target.closest('[data-edit-keys]')?.getAttribute('data-edit-keys');
     const saveKeyModal = e.target.closest('#saveKeyModalBtn');
     const editKeyModalClose = e.target.closest('#editKeyModal .modal-close');
@@ -587,37 +541,6 @@ function wirePanelEvents(){
     const editProductId = e.target.closest('[data-edit-product]')?.getAttribute('data-edit-product');
     const deleteProductId = e.target.closest('[data-delete-product]')?.getAttribute('data-delete-product');
 
-    if (saveId){
-      const apkInput = document.querySelector(`[data-apk-input="${saveId}"]`);
-      const proxyInput = document.querySelector(`[data-proxy-input="${saveId}"]`);
-      await saveKeys(saveId, apkInput.value, proxyInput.value);
-    }
-    if (addApkBatchId){
-      const list = document.querySelector(`[data-apk-batch-list="${addApkBatchId}"]`);
-      const index = list.querySelectorAll('.admin-batch-row').length;
-      const row = document.createElement('div');
-      row.className = 'admin-batch-row';
-      row.innerHTML = `
-        <input type="number" min="0" value="0" data-apk-batch-amount="${addApkBatchId}" data-batch-index="${index}">
-        <select data-apk-batch-duration="${addApkBatchId}" data-batch-index="${index}">
-          ${claimDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
-        </select>`;
-      list.appendChild(row);
-      return;
-    }
-    if (addProxyBatchId){
-      const list = document.querySelector(`[data-proxy-batch-list="${addProxyBatchId}"]`);
-      const index = list.querySelectorAll('.admin-batch-row').length;
-      const row = document.createElement('div');
-      row.className = 'admin-batch-row';
-      row.innerHTML = `
-        <input type="number" min="0" value="0" data-proxy-batch-amount="${addProxyBatchId}" data-batch-index="${index}">
-        <select data-proxy-batch-duration="${addProxyBatchId}" data-batch-index="${index}">
-          ${proxyDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
-        </select>`;
-      list.appendChild(row);
-      return;
-    }
     if (editKeysTarget){
       const [uid, type] = editKeysTarget.split(':');
       openEditKeyModal(uid, type);
@@ -628,7 +551,15 @@ function wirePanelEvents(){
       return;
     }
     if (saveKeyModal){
-      applyEditKeyModal();
+      const modal = $('editKeyModal');
+      const uid = modal?.dataset?.userId;
+      const type = modal?.dataset?.keyType;
+      const amount = parseInt($('editKeyAmount').value, 10) || 1;
+      const duration = $('editKeyDuration').value;
+      if (uid && type && duration) {
+        await applyQuickKeyAdjustment(uid, type, amount, duration);
+        closeEditKeyModal();
+      }
       return;
     }
     if (copyLinkId){

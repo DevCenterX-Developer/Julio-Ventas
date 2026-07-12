@@ -744,7 +744,7 @@ function buyKeyPackage(){
   const selectedOption = section.durationOptions.find(option => option.days === purchaseSelection.durationDays) || section.durationOptions[0];
   const durationLabel = getKeyDurationLabel(selectedOption.days);
   const selectedPackageOption = (packageContentOptions[section.id] || []).find(option => option.value === purchaseSelection.packageContent);
-  const selectedPackageText = selectedPackageOption ? selectedPackageOption.value : section.subtitle;
+  const selectedPackageText = selectedPackageOption ? selectedPackageOption.label : section.subtitle;
   const contentText = purchaseSelection.packageContent ? ` Contenido: ${purchaseSelection.packageContent}.` : ' Contenido: Sin especificar.';
   const message = `Hola Julio, quiero ${amount} key${amount > 1 ? 's' : ''} de ${section.title.toUpperCase()} (${selectedPackageText}) para el cliente ${client}. Duración: ${durationLabel}. Precio: ${money(selectedOption.price)} USD.${contentText}`;
   const waLink = `https://wa.me/+573135875113?text=${encodeURIComponent(message)}`;
