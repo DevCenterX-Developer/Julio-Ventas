@@ -195,7 +195,12 @@ h2 .icon-box{
 .subtext{ color:var(--muted); margin:0; font-size:.94rem; }
 
 /* ---------- GRID / CARDS ---------- */
-.grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(235px,1fr)); gap:20px; }
+.grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fill, minmax(215px, 260px));
+  justify-content:center;
+  gap:20px;
+}
 .card{
   background:linear-gradient(155deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
   border:1px solid var(--glass-brd);
@@ -303,17 +308,20 @@ button, .btn{ font-family:inherit; }
 }
 .purchase-grid-cards{
   display:grid;
-  grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
-  gap:20px;
+  grid-template-columns:repeat(auto-fit, minmax(150px, 190px));
+  justify-content:center;
+  gap:16px;
+}
+@media (min-width: 640px) {
+  .purchase-grid-cards{
+    grid-template-columns:repeat(auto-fit, minmax(170px, 210px));
+    gap:18px;
+  }
 }
 @media (min-width: 1100px) {
-  .purchase-shell{
-    flex-direction:row;
-    align-items:flex-start;
-  }
-  .purchase-category{
-    flex:1;
-    max-width:48%;
+  .purchase-grid-cards{
+    grid-template-columns:repeat(auto-fit, minmax(180px, 220px));
+    gap:20px;
   }
 }
 .purchase-card{
