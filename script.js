@@ -100,14 +100,14 @@ const packageContentOptions = {
 };
 
 const products = [
-  { id:'p3', name:'572 Diamantes FF',    icon:'diamond', image:'imagenes/drip-apk.jpeg', cost:1, currency:'apk', tier:'S' },
-  { id:'p7', name:'Mascota Exclusiva',   icon:'paw',     image:'imagenes/drip-proxy.jpeg', cost:1, currency:'proxy', tier:'S' },
-  { id:'p2', name:'341 Diamantes FF',    icon:'diamond', image:'imagenes/hg-apk.jpeg', cost:1, currency:'apk', tier:'A' },
-  { id:'p5', name:'Skin de Arma',        icon:'target',  image:'imagenes/hg-proxy.jpeg', cost:1, currency:'proxy', tier:'A' },
-  { id:'p4', name:'Pase Elite Actual',   icon:'ticket',  image:'imagenes/cuban-apk.jpeg', cost:1, currency:'apk', tier:'B' },
-  { id:'p6', name:'Bundle de Personaje', icon:'shirt',   image:'imagenes/cuban-proxy.jpeg', cost:1, currency:'proxy', tier:'B' },
-  { id:'p1', name:'110 Diamantes FF',    icon:'diamond', image:'imagenes/drip-apk.jpeg', cost:1, currency:'apk', tier:'C' },
-  { id:'p8', name:'Emote Especial',      icon:'star',    image:'imagenes/drip-proxy.jpeg', cost:1, currency:'proxy', tier:'C' },
+  { id:'p3', name:'Drip APK',          icon:'diamond', image:'imagenes/drip-apk.jpeg', cost:1, currency:'apk', tier:'S' },
+  { id:'p7', name:'Drip Proxy',        icon:'paw',     image:'imagenes/drip-proxy.jpeg', cost:1, currency:'proxy', tier:'S' },
+  { id:'p2', name:'HG APK',            icon:'diamond', image:'imagenes/hg-apk.jpeg', cost:1, currency:'apk', tier:'A' },
+  { id:'p5', name:'HG Proxy',          icon:'target',  image:'imagenes/hg-proxy.jpeg', cost:1, currency:'proxy', tier:'A' },
+  { id:'p4', name:'Cuban APK',         icon:'ticket',  image:'imagenes/cuban-apk.jpeg', cost:1, currency:'apk', tier:'B' },
+  { id:'p6', name:'Cuban Proxy',       icon:'shirt',   image:'imagenes/cuban-proxy.jpeg', cost:1, currency:'proxy', tier:'B' },
+  { id:'p1', name:'Drip APK',          icon:'diamond', image:'imagenes/drip-apk.jpeg', cost:1, currency:'apk', tier:'C' },
+  { id:'p8', name:'Drip Proxy',        icon:'star',    image:'imagenes/drip-proxy.jpeg', cost:1, currency:'proxy', tier:'C' },
 ];
 
 const CLAIM_BASE_URL = 'https://juliojl.vercel.app';
@@ -178,6 +178,18 @@ function getActiveKeys(data = {}, currency = 'apk') {
   });
 }
 
+function getUsableActiveKeyEntries(data = {}, currency = 'apk') {
+  const entries = Array.isArray(data?.activeKeys) ? data.activeKeys : [];
+  const now = Date.now();
+  return entries
+    .map((entry, index) => ({ ...entry, index }))
+    .filter((entry) => {
+      if (entry?.type && entry.type !== currency) return false;
+      const expiresAt = toDate(entry?.expiresAt);
+      return !expiresAt || expiresAt.getTime() > now;
+    });
+}
+
 function getActiveKeySummary(data = {}, currency = 'apk') {
   const entries = getActiveKeys(data, currency);
   return {
@@ -207,6 +219,10 @@ let purchaseSelection = {
   client: '',
   packageContent: '',
   packageNote: ''
+};
+let redemptionSelection = {
+  productId: null,
+  activeKeyIndex: null
 };
 
 const $ = (id) => document.getElementById(id);
@@ -351,7 +367,7 @@ function buildStoreView(){
     <section id="productos">
       <div class="section-head">
         <h2>${iconBox('diamond',18)} Productos disponibles</h2>
-        <p class="subtext">Canjea tus Keys por diamantes, skins y más.</p>
+        <p class="subtext">Canjea tus keys por APK o Proxy y obtén productos.</p>
       </div>
       <div class="grid" id="productsGrid"></div>
     </section>
@@ -420,6 +436,30 @@ function buildStoreView(){
         </div>
       </div>
       <button id="modalSubmitBtn" class="complete-btn">${svg('check',16)} Enviar pedido a WhatsApp</button>
+    </div>
+  </div>
+  <div id="redeemModal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h3>${svg('check',18)} Canjear producto</h3>
+          <p id="redeemModalSubtitle">Elige una key activa para validar el canje.</p>
+        </div>
+        <button class="modal-close" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-row">
+          <div class="modal-label">Producto</div>
+          <div id="redeemProductName" class="modal-value"></div>
+        </div>
+        <div class="detail-field">
+          <label for="redeemKeySelect">Selecciona una key activa</label>
+          <select id="redeemKeySelect" class="client-input"></select>
+        </div>
+        <div id="redeemHint" class="redeem-hint">Se usará una key activa guardada en tu cuenta para validar el canje.</div>
+      </div>
+      <button id="redeemSubmitBtn" class="complete-btn">${svg('check',16)} Canjear ahora</button>
     </div>
   </div>
   `;
@@ -508,7 +548,8 @@ function renderProducts(){
   const balances = getKeyBalances(userData);
   const balance = p => p.currency === 'proxy' ? balances.proxyKeys : balances.apkKeys;
   products.forEach((p, i) => {
-    const canBuy = balance(p) >= p.cost;
+    const activeEntries = getUsableActiveKeyEntries(userData, p.currency === 'proxy' ? 'proxy' : 'apk');
+    const canBuy = balance(p) >= p.cost || activeEntries.length > 0;
     const card = document.createElement('div');
     card.className = 'card';
     card.style.animationDelay = (i * 0.06) + 's';
@@ -518,9 +559,9 @@ function renderProducts(){
       </div>
       <div class="product-name">${escapeHtml(p.name)}</div>
       <div class="price">${svg('key',16)} 1 ${p.currency === 'proxy' ? 'Proxy' : 'APK'}</div>
-      <div class="subprice">Canjea con 1 key ${p.currency === 'proxy' ? 'Proxy' : 'APK'}</div>
+      <div class="subprice">Canjea con una key activa o con saldo disponible</div>
       <button data-buyproduct="${p.id}" ${canBuy ? '' : 'disabled'}>
-        ${canBuy ? svg('cart',16) + ' Canjear' : svg('lock',16) + ' Keys insuficientes'}
+        ${canBuy ? svg('cart',16) + ' Canjear' : svg('lock',16) + ' Sin keys disponibles'}
       </button>
     `;
     grid.appendChild(card);
@@ -675,17 +716,21 @@ async function findMatchingPromoCode(product){
     )) || null;
 }
 
-async function buyProduct(id){
+async function buyProduct(id, selectedEntryIndex = null){
   const p = products.find(x => x.id === id);
   if (!p) return;
   await refreshUserData();
   const balances = getKeyBalances(userData);
-  const activeKeySummary = getActiveKeySummary(userData, p.currency === 'proxy' ? 'proxy' : 'apk');
+  const activeKeyCurrency = p.currency === 'proxy' ? 'proxy' : 'apk';
+  const activeEntries = getUsableActiveKeyEntries(userData, activeKeyCurrency);
   const matchingCode = await findMatchingPromoCode(p);
   const availableBalance = p.currency === 'proxy' ? balances.proxyKeys : balances.apkKeys;
   const canUseBalance = availableBalance >= p.cost;
-  const canUseActiveKey = activeKeySummary.total >= p.cost;
   const canUseCode = Boolean(matchingCode);
+  const selectedEntry = selectedEntryIndex !== null
+    ? activeEntries.find((entry) => entry.index === Number(selectedEntryIndex)) || null
+    : null;
+  const canUseActiveKey = Boolean(selectedEntry) && (Number(selectedEntry.amount) || 1) >= p.cost;
 
   if (!canUseBalance && !canUseActiveKey && !canUseCode){
     toast(`No tienes suficientes keys ${p.currency === 'proxy' ? 'Proxy' : 'APK'} o un código activo para este producto.`, true);
@@ -694,23 +739,21 @@ async function buyProduct(id){
 
   const balanceField = p.currency === 'proxy' ? 'proxyKeys' : 'apkKeys';
   const updateData = {};
-  if (canUseBalance && !canUseActiveKey && !canUseCode){
-    updateData[balanceField] = increment(-p.cost);
-    updateData.keys = increment(-p.cost);
-  }
-
-  if (canUseActiveKey && !canUseCode) {
-    const nextEntries = [...activeKeySummary.entries];
-    const firstEntry = nextEntries[0];
-    if (firstEntry) {
-      const remaining = (Number(firstEntry.amount) || 1) - p.cost;
+  if (canUseActiveKey) {
+    const nextEntries = [...(Array.isArray(userData.activeKeys) ? userData.activeKeys : [])];
+    const targetEntry = nextEntries[selectedEntry.index];
+    if (targetEntry) {
+      const remaining = (Number(targetEntry.amount) || 1) - p.cost;
       if (remaining > 0) {
-        firstEntry.amount = remaining;
+        targetEntry.amount = remaining;
       } else {
-        nextEntries.shift();
+        nextEntries.splice(selectedEntry.index, 1);
       }
       updateData.activeKeys = nextEntries;
     }
+  } else if (canUseBalance && !canUseCode) {
+    updateData[balanceField] = increment(-p.cost);
+    updateData.keys = increment(-p.cost);
   }
 
   if (Object.keys(updateData).length) {
@@ -724,6 +767,37 @@ async function buyProduct(id){
   showCelebration('¡Clave generada!', `Tu canje quedó guardado y la clave es: ${keyCode}`, keyCode);
   toast(`Canjeaste: ${p.name}${matchingCode ? ' con código activo' : ''}`);
   await renderStore();
+}
+
+function openRedeemModal(productId){
+  const product = products.find(x => x.id === productId);
+  if (!product) return;
+  const activeEntries = getUsableActiveKeyEntries(userData, product.currency === 'proxy' ? 'proxy' : 'apk');
+  const modal = $('redeemModal');
+  if (!modal) return;
+  redemptionSelection.productId = productId;
+  redemptionSelection.activeKeyIndex = null;
+  $('redeemModalSubtitle').textContent = `${product.name} · ${product.currency === 'proxy' ? 'Proxy' : 'APK'}`;
+  $('redeemProductName').textContent = product.name;
+  const select = $('redeemKeySelect');
+  select.innerHTML = activeEntries.length
+    ? activeEntries.map((entry) => {
+        const durationLabel = entry.durationDays ? getKeyDurationLabel(entry.durationDays) : 'Sin tiempo';
+        return `<option value="${entry.index}">${(entry.amount || 1)} key${(entry.amount || 1) > 1 ? 's' : ''} · ${entry.type?.toUpperCase() || 'APK'} · ${durationLabel}</option>`;
+      }).join('')
+    : '<option value="">No tienes keys activas disponibles</option>';
+  $('redeemHint').textContent = activeEntries.length
+    ? 'Selecciona una key activa para validar el canje con los datos guardados en la base.'
+    : 'No hay keys activas disponibles para este tipo. El canje se bloqueará hasta que tengas una.';
+  modal.classList.remove('hidden');
+}
+
+function closeRedeemModal(){
+  const modal = $('redeemModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  redemptionSelection.productId = null;
+  redemptionSelection.activeKeyIndex = null;
 }
 
 function initStoreView(){
@@ -753,6 +827,9 @@ function initStoreView(){
     const buyProdId = e.target.closest('[data-buyproduct]')?.getAttribute('data-buyproduct');
     const completeBtn = e.target.closest('#completeOrderBtn');
     const modalSubmit = e.target.closest('#modalSubmitBtn');
+    const redeemSubmit = e.target.closest('#redeemSubmitBtn');
+    const redeemModalClose = e.target.closest('#redeemModal .modal-close');
+    const redeemModalBackdrop = e.target.closest('#redeemModal .modal-backdrop');
 
     if (keyCard) {
       const [sectionId, amount] = keyCard.getAttribute('data-keycard').split(':');
@@ -775,9 +852,22 @@ function initStoreView(){
       return;
     }
 
+    if (redeemModalClose || redeemModalBackdrop) {
+      closeRedeemModal();
+      return;
+    }
+
     if (modalSubmit) {
       buyKeyPackage();
       closePurchaseModal();
+      return;
+    }
+
+    if (redeemSubmit) {
+      if (redemptionSelection.productId) {
+        buyProduct(redemptionSelection.productId, redemptionSelection.activeKeyIndex);
+      }
+      closeRedeemModal();
       return;
     }
 
@@ -787,7 +877,22 @@ function initStoreView(){
     }
 
     if (buyProdId) {
-      buyProduct(buyProdId);
+      void (async () => {
+        await refreshUserData();
+        const p = products.find(x => x.id === buyProdId);
+        if (!p) return;
+        const activeEntries = getUsableActiveKeyEntries(userData, p.currency === 'proxy' ? 'proxy' : 'apk');
+        const matchingCode = await findMatchingPromoCode(p);
+        if (matchingCode) {
+          await buyProduct(buyProdId);
+          return;
+        }
+        if (activeEntries.length) {
+          openRedeemModal(buyProdId);
+          return;
+        }
+        await buyProduct(buyProdId);
+      })();
     }
   });
 
@@ -800,6 +905,12 @@ function initStoreView(){
     }
     if (e.target.id === 'packageNoteModal') {
       purchaseSelection.packageNote = e.target.value;
+    }
+  });
+
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'redeemKeySelect') {
+      redemptionSelection.activeKeyIndex = e.target.value ? Number(e.target.value) : null;
     }
   });
 }
