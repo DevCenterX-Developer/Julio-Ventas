@@ -8,7 +8,7 @@ import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, updateDoc,
+  getFirestore, doc, getDoc, updateDoc, setDoc,
   collection, getDocs
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 
@@ -43,7 +43,8 @@ const ICONS = {
   user: `<circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-6 8-6s8 2 8 6"/>`,
   cart: `<circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.4 12.2A2 2 0 0 0 8.4 17h8.2a2 2 0 0 0 2-1.6L21 7H6"/>`,
   wallet: `<path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3H5a2 2 0 0 1-2-2Z"/><path d="M3 7v11a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1h-4a2 2 0 0 0 0 4h4"/>`,
-  gem: `<path d="M12 21 4 9l4-6h8l4 6Z"/><path d="M4 9h16M9 3l3 6 3-6M8.5 9 12 21l3.5-12"/>`
+  gem: `<path d="M12 21 4 9l4-6h8l4 6Z"/><path d="M4 9h16M9 3l3 6 3-6M8.5 9 12 21l3.5-12"/>`,
+  menu: `<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>`
 };
 function svg(name, size = 22, cls = "") {
   return `<svg class="icon ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`;
@@ -161,7 +162,7 @@ function buildPanelView(){
     <div class="brand">${iconBox('shield',20)} Julio <span class="accent-word">Ventas</span> · Admin</div>
     <div class="header-right">
       <span class="user-tag" id="adminEmail"></span>
-      <button class="iconbtn" id="menuToggle">${svg('cart',16)} Menú</button>
+      <button class="iconbtn" id="menuToggle">${svg('menu',16)} Menú</button>
       <a href="../index.html" class="iconbtn">${svg('cart',16)} Ir a la tienda</a>
       <button class="iconbtn" id="logoutBtn">${svg('logout',16)} Salir</button>
     </div>
