@@ -312,17 +312,29 @@ function renderTable(list){
       <td>
         <div class="admin-balance-field">
           <input type="number" min="0" value="${apkValue}" data-apk-input="${u.id}">
-          <select data-apk-duration-select="${u.id}">
-            ${claimDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
-          </select>
+          <div class="admin-batch-list" data-apk-batch-list="${u.id}">
+            <div class="admin-batch-row">
+              <input type="number" min="0" value="0" data-apk-batch-amount="${u.id}" data-batch-index="0">
+              <select data-apk-batch-duration="${u.id}" data-batch-index="0">
+                ${claimDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <button class="admin-batch-btn" data-add-apk-batch="${u.id}">+ entrada APK</button>
         </div>
       </td>
       <td>
         <div class="admin-balance-field">
           <input type="number" min="0" value="${proxyValue}" data-proxy-input="${u.id}">
-          <select data-proxy-duration-select="${u.id}">
-            ${proxyDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
-          </select>
+          <div class="admin-batch-list" data-proxy-batch-list="${u.id}">
+            <div class="admin-batch-row">
+              <input type="number" min="0" value="0" data-proxy-batch-amount="${u.id}" data-batch-index="0">
+              <select data-proxy-batch-duration="${u.id}" data-batch-index="0">
+                ${proxyDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <button class="admin-batch-btn" data-add-proxy-batch="${u.id}">+ entrada Proxy</button>
         </div>
       </td>
       <td class="row-actions">
@@ -417,32 +429,30 @@ function buildActiveKeyEntry(type, amount, durationValue){
   };
 }
 
-async function saveKeys(uid, apkValue, proxyValue, apkDuration, proxyDuration){
+function collectBatchEntries(uid, type){
+  const list = document.querySelector(`[data-${type}-batch-list="${uid}"]`);
+  if (!list) return [];
+  return Array.from(list.querySelectorAll('.admin-batch-row')).map((row, index) => {
+    const amountInput = row.querySelector(`[data-${type}-batch-amount="${uid}"]`);
+    const durationSelect = row.querySelector(`[data-${type}-batch-duration="${uid}"]`);
+    const amount = parseInt(amountInput?.value || '0', 10) || 0;
+    const duration = durationSelect?.value || '';
+    if (!amount || !duration) return null;
+    return buildActiveKeyEntry(type, amount, duration);
+  }).filter(Boolean);
+}
+
+async function saveKeys(uid, apkValue, proxyValue){
   const apkNum = Math.max(0, parseInt(apkValue, 10) || 0);
   const proxyNum = Math.max(0, parseInt(proxyValue, 10) || 0);
-  if (apkNum > 0 && !apkDuration) {
-    toast('Selecciona la duración de la key APK.', true);
-    return;
-  }
-  if (proxyNum > 0 && !proxyDuration) {
-    toast('Selecciona la duración de la key Proxy.', true);
-    return;
-  }
 
   const snap = await getDoc(doc(db, 'users', uid));
   const currentData = snap.data() || {};
-  const currentApk = Number(currentData.apkKeys ?? currentData.keys ?? 0);
-  const currentProxy = Number(currentData.proxyKeys ?? 0);
   const nextActiveKeys = Array.isArray(currentData.activeKeys) ? [...currentData.activeKeys] : [];
-  const apkDelta = apkNum - currentApk;
-  const proxyDelta = proxyNum - currentProxy;
+  const apkEntries = collectBatchEntries(uid, 'apk');
+  const proxyEntries = collectBatchEntries(uid, 'proxy');
 
-  if (apkDelta > 0 && apkDuration) {
-    nextActiveKeys.push(buildActiveKeyEntry('apk', apkDelta, apkDuration));
-  }
-  if (proxyDelta > 0 && proxyDuration) {
-    nextActiveKeys.push(buildActiveKeyEntry('proxy', proxyDelta, proxyDuration));
-  }
+  nextActiveKeys.push(...apkEntries, ...proxyEntries);
 
   await updateDoc(doc(db, 'users', uid), {
     apkKeys: apkNum,
@@ -450,7 +460,7 @@ async function saveKeys(uid, apkValue, proxyValue, apkDuration, proxyDuration){
     keys: apkNum + proxyNum,
     activeKeys: nextActiveKeys
   });
-  toast('Balances actualizados correctamente');
+  toast('Balances y keys activas actualizados correctamente');
   await loadUsers();
 }
 
@@ -533,32 +543,52 @@ function initPanelView(user){
     const saveId = e.target.closest('[data-save]')?.getAttribute('data-save');
     const addApkId = e.target.closest('[data-add-apk]')?.getAttribute('data-add-apk');
     const addProxyId = e.target.closest('[data-add-proxy]')?.getAttribute('data-add-proxy');
+    const addApkBatchId = e.target.closest('[data-add-apk-batch]')?.getAttribute('data-add-apk-batch');
+    const addProxyBatchId = e.target.closest('[data-add-proxy-batch]')?.getAttribute('data-add-proxy-batch');
     const copyLinkId = e.target.closest('[data-copy-link]')?.getAttribute('data-copy-link');
     const editLinkId = e.target.closest('[data-edit-link]')?.getAttribute('data-edit-link');
     if (saveId){
       const apkInput = document.querySelector(`[data-apk-input="${saveId}"]`);
       const proxyInput = document.querySelector(`[data-proxy-input="${saveId}"]`);
-      const apkDuration = document.querySelector(`[data-apk-duration-select="${saveId}"]`)?.value || '1D';
-      const proxyDuration = document.querySelector(`[data-proxy-duration-select="${saveId}"]`)?.value || '3D';
-      await saveKeys(saveId, apkInput.value, proxyInput.value, apkDuration, proxyDuration);
+      await saveKeys(saveId, apkInput.value, proxyInput.value);
     }
     if (addApkId){
       const apkInput = document.querySelector(`[data-apk-input="${addApkId}"]`);
-      const proxyInput = document.querySelector(`[data-proxy-input="${addApkId}"]`);
-      const apkDuration = document.querySelector(`[data-apk-duration-select="${addApkId}"]`)?.value || '1D';
-      const proxyDuration = document.querySelector(`[data-proxy-duration-select="${addApkId}"]`)?.value || '3D';
       const newVal = (parseInt(apkInput.value, 10) || 0) + 50;
       apkInput.value = newVal;
-      await saveKeys(addApkId, newVal, proxyInput.value, apkDuration, proxyDuration);
+      await saveKeys(addApkId, newVal, document.querySelector(`[data-proxy-input="${addApkId}"]`).value);
     }
     if (addProxyId){
-      const apkInput = document.querySelector(`[data-apk-input="${addProxyId}"]`);
       const proxyInput = document.querySelector(`[data-proxy-input="${addProxyId}"]`);
-      const apkDuration = document.querySelector(`[data-apk-duration-select="${addProxyId}"]`)?.value || '1D';
-      const proxyDuration = document.querySelector(`[data-proxy-duration-select="${addProxyId}"]`)?.value || '3D';
       const newVal = (parseInt(proxyInput.value, 10) || 0) + 50;
       proxyInput.value = newVal;
-      await saveKeys(addProxyId, apkInput.value, newVal, apkDuration, proxyDuration);
+      await saveKeys(addProxyId, document.querySelector(`[data-apk-input="${addProxyId}"]`).value, newVal);
+    }
+    if (addApkBatchId){
+      const list = document.querySelector(`[data-apk-batch-list="${addApkBatchId}"]`);
+      const index = list.querySelectorAll('.admin-batch-row').length;
+      const row = document.createElement('div');
+      row.className = 'admin-batch-row';
+      row.innerHTML = `
+        <input type="number" min="0" value="0" data-apk-batch-amount="${addApkBatchId}" data-batch-index="${index}">
+        <select data-apk-batch-duration="${addApkBatchId}" data-batch-index="${index}">
+          ${claimDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
+        </select>`;
+      list.appendChild(row);
+      return;
+    }
+    if (addProxyBatchId){
+      const list = document.querySelector(`[data-proxy-batch-list="${addProxyBatchId}"]`);
+      const index = list.querySelectorAll('.admin-batch-row').length;
+      const row = document.createElement('div');
+      row.className = 'admin-batch-row';
+      row.innerHTML = `
+        <input type="number" min="0" value="0" data-proxy-batch-amount="${addProxyBatchId}" data-batch-index="${index}">
+        <select data-proxy-batch-duration="${addProxyBatchId}" data-batch-index="${index}">
+          ${proxyDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
+        </select>`;
+      list.appendChild(row);
+      return;
     }
     if (copyLinkId){
       const link = claimLinks.find(item => item.id === copyLinkId);

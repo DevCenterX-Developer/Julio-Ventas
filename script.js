@@ -657,11 +657,16 @@ function renderKeySummary(){
   $('totalKeyValue').textContent = balances.total;
   const dropdown = $('keySummaryDropdown');
   const activeItems = [];
+  const formatExpiry = (entry) => {
+    const expiresAt = toDate(entry?.expiresAt);
+    if (!expiresAt) return 'Sin fecha de expiración';
+    return `Expira ${expiresAt.toLocaleDateString('es-ES')}`;
+  };
   if (activeApk.entries.length) {
-    activeItems.push(...activeApk.entries.map(entry => `<div class="summary-entry"><span class="summary-type apk">APK</span><span>${entry.amount || 1} keys · ${entry.durationDays ? `${entry.durationDays} D` : 'Sin tiempo'}</span></div>`));
+    activeItems.push(...activeApk.entries.map(entry => `<div class="summary-entry"><span class="summary-type apk">APK</span><span>${entry.amount || 1} keys · ${entry.durationDays ? `${entry.durationDays} D` : 'Sin tiempo'} · ${formatExpiry(entry)}</span></div>`));
   }
   if (activeProxy.entries.length) {
-    activeItems.push(...activeProxy.entries.map(entry => `<div class="summary-entry"><span class="summary-type proxy">PROXY</span><span>${entry.amount || 1} keys · ${entry.durationDays ? `${entry.durationDays} D` : 'Sin tiempo'}</span></div>`));
+    activeItems.push(...activeProxy.entries.map(entry => `<div class="summary-entry"><span class="summary-type proxy">PROXY</span><span>${entry.amount || 1} keys · ${entry.durationDays ? `${entry.durationDays} D` : 'Sin tiempo'} · ${formatExpiry(entry)}</span></div>`));
   }
   dropdown.innerHTML = activeItems.length
     ? activeItems.join('')
