@@ -513,7 +513,6 @@ function openEditKeyModal(uid, type){
   modal.dataset.keyType = type;
   $('editKeyUser').textContent = user.email || '(usuario)';
   $('editKeyType').textContent = type.toUpperCase();
-  $('editKeyAmount').value = 1;
   fillEditKeyDurationOptions(type);
   modal.classList.remove('hidden');
 }

@@ -557,14 +557,12 @@ function closePurchaseModal(){
   modal.classList.add('hidden');
 }
 
-function renderProducts(){
+async function renderProducts(){
   const grid = $('productsGrid');
   grid.innerHTML = '';
-  const balances = getKeyBalances(userData);
-  const balance = p => p.currency === 'proxy' ? balances.proxyKeys : balances.apkKeys;
-  products.forEach((p, i) => {
-    const activeEntries = getUsableActiveKeyEntries(userData, p.currency === 'proxy' ? 'proxy' : 'apk');
-    const canBuy = balance(p) >= p.cost || activeEntries.length > 0;
+  const cards = await Promise.all(products.map(async (p, i) => {
+    const matchingCode = await findMatchingPromoCode(p);
+    const isAvailable = Boolean(matchingCode);
     const card = document.createElement('div');
     card.className = 'card';
     card.style.animationDelay = (i * 0.06) + 's';
@@ -574,13 +572,14 @@ function renderProducts(){
       </div>
       <div class="product-name">${escapeHtml(p.name)}</div>
       <div class="price">${svg('key',16)} 1 ${p.currency === 'proxy' ? 'Proxy' : 'APK'}</div>
-      <div class="subprice">Canjea con una key activa o con saldo disponible</div>
-      <button data-buyproduct="${p.id}" ${canBuy ? '' : 'disabled'}>
-        ${canBuy ? svg('cart',16) + ' Canjear' : svg('lock',16) + ' Sin keys disponibles'}
+      <div class="subprice">${isAvailable ? 'Disponible con código activo' : 'No disponible por el momento'}</div>
+      <button data-buyproduct="${p.id}" ${isAvailable ? '' : 'disabled'}>
+        ${isAvailable ? svg('cart',16) + ' Canjear' : svg('lock',16) + ' No disponible'}
       </button>
     `;
-    grid.appendChild(card);
-  });
+    return card;
+  }));
+  grid.append(...cards);
 }
 
 function getNextRankProgress(totalKeys){
@@ -720,7 +719,7 @@ async function renderStore(){
   const currentRank = getRank(balances.total);
   $('userEmail').textContent = `${currentUser?.email ?? ''} · ${currentRank.name}`;
   renderKeys();
-  renderProducts();
+  await renderProducts();
   await renderTierlist();
   await loadInventory();
   if (userData?.isAdmin) $('adminLink').style.display = 'flex';
@@ -764,48 +763,16 @@ async function findMatchingPromoCode(product){
     )) || null;
 }
 
-async function buyProduct(id, selectedEntryIndex = null){
+async function buyProduct(id){
   const p = products.find(x => x.id === id);
   if (!p) return;
   await refreshUserData();
-  const balances = getKeyBalances(userData);
-  const activeKeyCurrency = p.currency === 'proxy' ? 'proxy' : 'apk';
-  const activeEntries = getUsableActiveKeyEntries(userData, activeKeyCurrency);
   const matchingCode = await findMatchingPromoCode(p);
-  const availableBalance = p.currency === 'proxy' ? balances.proxyKeys : balances.apkKeys;
-  const canUseBalance = availableBalance >= p.cost;
-  const canUseCode = Boolean(matchingCode);
-  const selectedEntry = selectedEntryIndex !== null
-    ? activeEntries.find((entry) => entry.index === Number(selectedEntryIndex)) || null
-    : null;
-  const canUseActiveKey = Boolean(selectedEntry) && (Number(selectedEntry.amount) || 1) >= p.cost;
 
-  if (!canUseBalance && !canUseActiveKey && !canUseCode){
-    toast(`No tienes suficientes keys ${p.currency === 'proxy' ? 'Proxy' : 'APK'} o un código activo para este producto.`, true);
+  if (!matchingCode) {
+    toast('Este producto no está disponible en este momento.', true);
+    await renderProducts();
     return;
-  }
-
-  const balanceField = p.currency === 'proxy' ? 'proxyKeys' : 'apkKeys';
-  const updateData = {};
-  if (canUseActiveKey) {
-    const nextEntries = [...(Array.isArray(userData.activeKeys) ? userData.activeKeys : [])];
-    const targetEntry = nextEntries[selectedEntry.index];
-    if (targetEntry) {
-      const remaining = (Number(targetEntry.amount) || 1) - p.cost;
-      if (remaining > 0) {
-        targetEntry.amount = remaining;
-      } else {
-        nextEntries.splice(selectedEntry.index, 1);
-      }
-      updateData.activeKeys = nextEntries;
-    }
-  } else if (canUseBalance && !canUseCode) {
-    updateData[balanceField] = increment(-p.cost);
-    updateData.keys = increment(-p.cost);
-  }
-
-  if (Object.keys(updateData).length) {
-    await updateDoc(doc(db, 'users', currentUser.uid), updateData);
   }
 
   const date = new Date().toLocaleString();
@@ -813,7 +780,7 @@ async function buyProduct(id, selectedEntryIndex = null){
   await addDoc(collection(db, 'users', currentUser.uid, 'inventory'), { name: p.name, icon: p.icon, image: p.image, currency: p.currency, code: keyCode, type:'product', date, createdAt: serverTimestamp() });
   await addDoc(collection(db, 'users', currentUser.uid, 'history'), { type:'product', desc:`Canjeado: ${p.name}`, value: p.cost, currency: p.currency, icon: p.icon, date, createdAt: serverTimestamp() });
   showCelebration('¡Clave generada!', `Tu canje quedó guardado y la clave es: ${keyCode}`, keyCode);
-  toast(`Canjeaste: ${p.name}${matchingCode ? ' con código activo' : ''}`);
+  toast(`Canjeaste: ${p.name} con código activo`);
   await renderStore();
 }
 
@@ -929,14 +896,10 @@ function initStoreView(){
         await refreshUserData();
         const p = products.find(x => x.id === buyProdId);
         if (!p) return;
-        const activeEntries = getUsableActiveKeyEntries(userData, p.currency === 'proxy' ? 'proxy' : 'apk');
         const matchingCode = await findMatchingPromoCode(p);
-        if (matchingCode) {
-          await buyProduct(buyProdId);
-          return;
-        }
-        if (activeEntries.length) {
-          openRedeemModal(buyProdId);
+        if (!matchingCode) {
+          toast('Este producto no está disponible en este momento.', true);
+          await renderProducts();
           return;
         }
         await buyProduct(buyProdId);
