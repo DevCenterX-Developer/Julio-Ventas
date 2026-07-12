@@ -62,23 +62,79 @@ function iconBox(name, size = 18){ return `<span class="icon-box">${svg(name, si
 // ---------------------------------------------------------------------
 // CATÁLOGO
 // ---------------------------------------------------------------------
-const keyPackages = [
-  { id:'k1', name:'1 Key',  icon:'key', amount:1, price:1 },
-  { id:'k2', name:'2 Keys', icon:'key', amount:2, price:2 },
-  { id:'k3', name:'3 Keys', icon:'key', amount:3, price:3 },
-  { id:'k4', name:'4 Keys', icon:'key', amount:4, price:4 },
-  { id:'k5', name:'5 Keys', icon:'key', amount:5, price:5 },
+const keyOfferSections = [
+  {
+    id:'apk',
+    title:'APK',
+    subtitle:'HG APK / DRIP',
+    durationOptions: [
+      { days:1, price:2 },
+      { days:3, price:3.5 },
+      { days:15, price:8 },
+      { days:30, price:12 }
+    ]
+  },
+  {
+    id:'proxy',
+    title:'PROXY',
+    subtitle:'HG PROXY / DRIP PROXY',
+    durationOptions: [
+      { days:3, price:3.5 },
+      { days:7, price:5 },
+      { days:31, price:9 }
+    ]
+  }
 ];
+
+const packageContentOptions = {
+  apk: [
+    { value:'Drip Client', label:'APK Drip Client' },
+    { value:'HG Heats', label:'APK HG Heats' },
+    { value:'Cuban Mods', label:'APK Cuban Mods' }
+  ],
+  proxy: [
+    { value:'Drip Client', label:'Proxy Drip Client' },
+    { value:'HG Heats', label:'Proxy HG Heats' },
+    { value:'Cuban Mods', label:'Proxy Cuban Mods' }
+  ]
+};
+
 const products = [
-  { id:'p3', name:'572 Diamantes FF',    icon:'diamond', cost:110, tier:'S' },
-  { id:'p7', name:'Mascota Exclusiva',   icon:'paw',     cost:120, tier:'S' },
-  { id:'p2', name:'341 Diamantes FF',    icon:'diamond', cost:70,  tier:'A' },
-  { id:'p5', name:'Skin de Arma',        icon:'target',  cost:90,  tier:'A' },
-  { id:'p4', name:'Pase Elite Actual',   icon:'ticket',  cost:60,  tier:'B' },
-  { id:'p6', name:'Bundle de Personaje', icon:'shirt',   cost:80,  tier:'B' },
-  { id:'p1', name:'110 Diamantes FF',    icon:'diamond', cost:25,  tier:'C' },
-  { id:'p8', name:'Emote Especial',      icon:'star',    cost:35,  tier:'C' },
+  { id:'p3', name:'572 Diamantes FF',    icon:'diamond', image:'imagenes/drip-apk.jpeg', cost:1, currency:'apk', tier:'S' },
+  { id:'p7', name:'Mascota Exclusiva',   icon:'paw',     image:'imagenes/drip-proxy.jpeg', cost:1, currency:'proxy', tier:'S' },
+  { id:'p2', name:'341 Diamantes FF',    icon:'diamond', image:'imagenes/hg-apk.jpeg', cost:1, currency:'apk', tier:'A' },
+  { id:'p5', name:'Skin de Arma',        icon:'target',  image:'imagenes/hg-proxy.jpeg', cost:1, currency:'proxy', tier:'A' },
+  { id:'p4', name:'Pase Elite Actual',   icon:'ticket',  image:'imagenes/cuban-apk.jpeg', cost:1, currency:'apk', tier:'B' },
+  { id:'p6', name:'Bundle de Personaje', icon:'shirt',   image:'imagenes/cuban-proxy.jpeg', cost:1, currency:'proxy', tier:'B' },
+  { id:'p1', name:'110 Diamantes FF',    icon:'diamond', image:'imagenes/drip-apk.jpeg', cost:1, currency:'apk', tier:'C' },
+  { id:'p8', name:'Emote Especial',      icon:'star',    image:'imagenes/drip-proxy.jpeg', cost:1, currency:'proxy', tier:'C' },
 ];
+
+const CLAIM_BASE_URL = 'https://juliojl.vercel.app';
+
+function getClaimCodeFromLocation(){
+  const pathParts = window.location.pathname.split('/').filter(Boolean);
+  if (pathParts[0] === 'claim' && pathParts[1]) return pathParts[1];
+  const query = new URLSearchParams(window.location.search);
+  return query.get('claim') || query.get('code') || '';
+}
+
+function generateKeyCode(type = 'APK'){
+  const randomPart = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const stamp = Date.now().toString().slice(-4);
+  return `${type}-${stamp}-${randomPart}`;
+}
+
+function showCelebration(title, message, code){
+  const overlay = $('celebrationOverlay');
+  if (!overlay) return;
+  $('celebrationMessage').textContent = message;
+  $('celebrationCode').textContent = code;
+  overlay.querySelector('h3').textContent = title;
+  overlay.classList.remove('hidden');
+  setTimeout(() => overlay.classList.add('hidden'), 2800);
+}
+
 const ranks = [
   { name:'HEROICO', min:175, className:'heroico' },
   { name:'DIAMANTE', min:100, className:'diamante' },
@@ -89,6 +145,12 @@ const ranks = [
 
 function getRank(keys = 0){
   return ranks.find(rank => keys >= rank.min) || ranks[ranks.length - 1];
+}
+
+function getKeyBalances(data = {}){
+  const apkKeys = Number(data?.apkKeys ?? data?.keys ?? 0);
+  const proxyKeys = Number(data?.proxyKeys ?? 0);
+  return { apkKeys, proxyKeys, total: apkKeys + proxyKeys };
 }
 
 function escapeHtml(value = ''){
@@ -103,6 +165,15 @@ function escapeHtml(value = ''){
 let currentUser = null;
 let userData = null;
 let mode = "login";
+let currentClaimCode = '';
+let purchaseSelection = {
+  sectionId: 'apk',
+  amount: 1,
+  durationDays: null,
+  client: '',
+  packageContent: '',
+  packageNote: ''
+};
 
 const $ = (id) => document.getElementById(id);
 const money = (n) => '$' + n.toFixed(2);
@@ -190,12 +261,12 @@ function initAuthView(){
         const ref = doc(db, 'users', cred.user.uid);
         const snap = await getDoc(ref);
         if (!snap.exists()) {
-          await setDoc(ref, { email, keys:0, isAdmin:false, createdAt: serverTimestamp() });
+          await setDoc(ref, { email, apkKeys:0, proxyKeys:0, keys:0, isAdmin:false, createdAt: serverTimestamp() });
         }
       } else {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         await setDoc(doc(db, 'users', cred.user.uid), {
-          email, keys:0, isAdmin:false, createdAt: serverTimestamp()
+          email, apkKeys:0, proxyKeys:0, keys:0, isAdmin:false, createdAt: serverTimestamp()
         });
       }
       authMsg.className = 'auth-msg ok';
@@ -231,8 +302,8 @@ function buildStoreView(){
   <main>
     <section id="comprar" class="active">
       <div class="section-head">
-        <h2>${iconBox('key',18)} Comprar Keys</h2>
-        <p class="subtext">Compra Keys (moneda de la tienda) para poder canjear productos de Free Fire.</p>
+        <h2>${iconBox('key',18)} Pedidos por WhatsApp</h2>
+        <p class="subtext">Elige el paquete, confirma los días y te redirigimos a WhatsApp para terminar tu pedido.</p>
       </div>
       <div class="grid" id="keysGrid"></div>
     </section>
@@ -260,42 +331,153 @@ function buildStoreView(){
   </main>
   <footer>© 2026 Julio Ventas — Tienda no oficial de Free Fire. Solo con fines demostrativos.</footer>
   <div class="toast" id="toast"></div>
+  <div id="celebrationOverlay" class="celebration-overlay hidden">
+    <div class="celebration-card">
+      <div class="celebration-icon">${svg('check', 32)}</div>
+      <h3>¡Canjeado con éxito!</h3>
+      <p id="celebrationMessage">Tu producto quedó guardado en tu inventario.</p>
+      <div class="celebration-code" id="celebrationCode"></div>
+    </div>
+  </div>
+  <div id="purchaseModal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h3>${svg('cart',18)} Personaliza tu pedido</h3>
+          <p id="modalSectionSubtitle">Detalle del producto</p>
+        </div>
+        <button class="modal-close" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-row">
+          <div class="modal-label">Categoría</div>
+          <div id="modalCategory" class="modal-value"></div>
+        </div>
+        <div class="modal-row">
+          <div class="modal-label">Keys</div>
+          <div id="modalKeysCount" class="modal-value"></div>
+        </div>
+        <div class="detail-field">
+          <label for="clientNameModal">Cliente</label>
+          <input id="clientNameModal" class="client-input" type="text" placeholder="Nombre del cliente">
+        </div>
+        <div class="detail-field">
+          <label for="packageContentSelect">¿Qué debe contener tu paquete?</label>
+          <select id="packageContentSelect" class="client-input package-select">
+            <option value="">Selecciona una opción</option>
+          </select>
+        </div>
+        <div class="detail-field">
+          <label for="packageNoteModal">Notas adicionales</label>
+          <textarea id="packageNoteModal" class="client-input package-note" placeholder="Ej: incluir HG APK + DRIP para cuenta principal"></textarea>
+        </div>
+        <div class="modal-divider"></div>
+        <div class="modal-row modal-row-tight">
+          <span class="modal-label">Duración</span>
+          <div class="modal-duration-grid"></div>
+        </div>
+      </div>
+      <button id="modalSubmitBtn" class="complete-btn">${svg('check',16)} Enviar pedido a WhatsApp</button>
+    </div>
+  </div>
   `;
+}
+
+function getKeyDurationLabel(days){
+  if (days === 30) return '1 MES';
+  if (days === 31) return '1 MES';
+  return `${days} D`;
 }
 
 function renderKeys(){
   const grid = $('keysGrid');
-  grid.innerHTML = '';
-  keyPackages.forEach((pkg, i) => {
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.style.animationDelay = (i * 0.06) + 's';
-    card.innerHTML = `
-      ${pkg.tag ? `<div class="badge">${pkg.tag}</div>` : ''}
-      <div class="icon-wrap">${svg(pkg.icon, 26)}</div>
-      <h3>${pkg.name}</h3>
-      <div class="price">${svg('key',16)} ${pkg.amount} Keys</div>
-      <div class="subprice">${money(pkg.price)}</div>
-      <button data-buykey="${pkg.id}">${svg('cart',16)} Comprar</button>
-    `;
-    grid.appendChild(card);
-  });
+  if (!grid) return;
+
+  grid.innerHTML = `
+    <div class="purchase-shell">
+      ${keyOfferSections.map(section => `
+        <div class="purchase-category">
+          <div class="purchase-category-head">
+            <div>
+              <h3>${section.title}</h3>
+              <p>${section.subtitle}</p>
+            </div>
+          </div>
+          <div class="grid purchase-grid-cards">
+            ${[1,2,3,4,5].map(amount => `
+              <button class="card purchase-card ${purchaseSelection.sectionId === section.id && purchaseSelection.amount === amount ? 'selected' : ''}" data-keycard="${section.id}:${amount}">
+                <div class="icon-wrap">${svg('key', 24)}</div>
+                <h3>${amount} key${amount > 1 ? 's' : ''}</h3>
+                <div class="subprice">Paquete personalizable</div>
+                <span class="purchase-cta">Personalizar</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function openPurchaseModal(sectionId, amount){
+  const section = keyOfferSections.find(item => item.id === sectionId) || keyOfferSections[0];
+  purchaseSelection.sectionId = sectionId;
+  purchaseSelection.amount = amount;
+  if (!purchaseSelection.durationDays || !section.durationOptions.some(opt => opt.days === purchaseSelection.durationDays)) {
+    purchaseSelection.durationDays = section.durationOptions[0].days;
+  }
+
+  const availableOptions = packageContentOptions[section.id] || [];
+  const isValidSelection = purchaseSelection.packageContent && availableOptions.some(option => option.value === purchaseSelection.packageContent);
+  purchaseSelection.packageContent = isValidSelection ? purchaseSelection.packageContent : '';
+
+  const modal = $('purchaseModal');
+  if (!modal) return;
+
+  $('modalSectionSubtitle').textContent = `${section.title} — ${section.subtitle}`;
+  $('modalCategory').textContent = section.title;
+  $('modalKeysCount').textContent = amount;
+  $('clientNameModal').value = purchaseSelection.client;
+  const packageContentSelect = $('packageContentSelect');
+  packageContentSelect.innerHTML = `<option value="">Selecciona una opción</option>${availableOptions.map(option => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join('')}`;
+  packageContentSelect.value = purchaseSelection.packageContent || '';
+  $('packageNoteModal').value = purchaseSelection.packageNote;
+
+  const durationGrid = modal.querySelector('.modal-duration-grid');
+  durationGrid.innerHTML = section.durationOptions.map(option => `
+    <button class="duration-btn ${purchaseSelection.durationDays === option.days ? 'active' : ''}" data-duration="${option.days}">
+      <span>${getKeyDurationLabel(option.days)}</span>
+      <small>${money(option.price)}</small>
+    </button>
+  `).join('');
+
+  modal.classList.remove('hidden');
+}
+
+function closePurchaseModal(){
+  const modal = $('purchaseModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
 }
 
 function renderProducts(){
   const grid = $('productsGrid');
   grid.innerHTML = '';
-  const balance = userData?.keys ?? 0;
+  const balances = getKeyBalances(userData);
+  const balance = p => p.currency === 'proxy' ? balances.proxyKeys : balances.apkKeys;
   products.forEach((p, i) => {
-    const canBuy = balance >= p.cost;
+    const canBuy = balance(p) >= p.cost;
     const card = document.createElement('div');
     card.className = 'card';
     card.style.animationDelay = (i * 0.06) + 's';
     card.innerHTML = `
-      <div class="icon-wrap">${svg(p.icon, 26)}</div>
-      <h3>${p.name}</h3>
-      <div class="price">${svg('key',16)} ${p.cost}</div>
-      <div class="subprice">&nbsp;</div>
+      <div class="product-media">
+        ${p.image ? `<img src="${p.image}" alt="${escapeHtml(p.name)}">` : `<div class="icon-wrap">${svg(p.icon, 26)}</div>`}
+      </div>
+      <h3>${escapeHtml(p.name)}</h3>
+      <div class="price">${svg('key',16)} 1 ${p.currency === 'proxy' ? 'Proxy' : 'APK'}</div>
+      <div class="subprice">Canjea con 1 key ${p.currency === 'proxy' ? 'Proxy' : 'APK'}</div>
       <button data-buyproduct="${p.id}" ${canBuy ? '' : 'disabled'}>
         ${canBuy ? svg('cart',16) + ' Canjear' : svg('lock',16) + ' Keys insuficientes'}
       </button>
@@ -310,8 +492,17 @@ async function renderTierlist(){
   try {
     const snap = await getDocs(collection(db, 'users'));
     const players = snap.docs
-      .map(d => ({ email: d.data().email || 'Usuario', keys: Number(d.data().keys) || 0 }))
-      .sort((a, b) => b.keys - a.keys || a.email.localeCompare(b.email));
+      .map(d => {
+        const data = d.data();
+        const balances = getKeyBalances(data);
+        return {
+          email: data.email || 'Usuario',
+          apkKeys: balances.apkKeys,
+          proxyKeys: balances.proxyKeys,
+          totalKeys: balances.total
+        };
+      })
+      .sort((a, b) => b.totalKeys - a.totalKeys || a.email.localeCompare(b.email));
 
     if (!players.length){
       wrap.innerHTML = `<p class="empty">Aún no hay jugadores en el ranking.</p>`;
@@ -319,7 +510,7 @@ async function renderTierlist(){
     }
 
     wrap.innerHTML = `<div class="leaderboard">${players.map((player, index) => {
-      const rank = getRank(player.keys);
+      const rank = getRank(player.totalKeys);
       return `
         <div class="leaderboard-row" style="animation-delay:${index * 0.05}s">
           <span class="position">#${index + 1}</span>
@@ -327,10 +518,14 @@ async function renderTierlist(){
             <span class="player-email">${escapeHtml(player.email)}</span>
             <span class="rank-tag ${rank.className}">${rank.name}</span>
           </div>
-          <span class="player-keys">${svg('key',16)} ${player.keys} Keys</span>
+          <span class="player-keys">
+            <span class="currency-pill">${svg('key',14)} ${player.apkKeys} APK</span>
+            <span class="currency-pill">${svg('key',14)} ${player.proxyKeys} PROXY</span>
+            <span class="currency-pill total">${svg('wallet',14)} ${player.totalKeys} Total</span>
+          </span>
         </div>`;
     }).join('')}</div>
-    <p class="rank-legend">Bronce: 0 · Plata: 20 · Oro: 50 · Diamante: 100 · Heroico: 175 Keys</p>`;
+    <p class="rank-legend">Ranking basado en el total de APK + Proxy.</p>`;
   } catch (error) {
     console.error('No se pudo cargar la Tier List:', error);
     wrap.innerHTML = `<p class="empty">No fue posible cargar el ranking.</p>`;
@@ -351,7 +546,15 @@ async function loadInventory(){
     const div = document.createElement('div');
     div.className = 'inv-item';
     div.style.animationDelay = (i++ * 0.05) + 's';
-    div.innerHTML = `<div class="icon-wrap">${svg(item.icon || 'box', 20)}</div><div><h4>${item.name}</h4><small>Canjeado: ${item.date || ''}</small></div>`;
+    div.innerHTML = `
+      <div class="inv-media">
+        ${item.image ? `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}">` : `<div class="icon-wrap">${svg(item.icon || 'box', 20)}</div>`}
+      </div>
+      <div>
+        <h4>${escapeHtml(item.name)}</h4>
+        <small>Canjeado: ${escapeHtml(item.date || '')}</small>
+        ${item.code ? `<div class="inv-code">${escapeHtml(item.code)}</div>` : ''}
+      </div>`;
     grid.appendChild(div);
   });
 }
@@ -363,8 +566,9 @@ async function refreshUserData(){
 
 async function renderStore(){
   await refreshUserData();
-  $('keyCount').textContent = userData?.keys ?? 0;
-  const currentRank = getRank(userData?.keys ?? 0);
+  const balances = getKeyBalances(userData);
+  $('keyCount').textContent = `${balances.apkKeys} APK · ${balances.proxyKeys} PROXY · ${balances.total} TOTAL`;
+  const currentRank = getRank(balances.total);
   $('userEmail').textContent = `${currentUser?.email ?? ''} · ${currentRank.name}`;
   renderKeys();
   renderProducts();
@@ -373,30 +577,50 @@ async function renderStore(){
   if (userData?.isAdmin) $('adminLink').style.display = 'flex';
 }
 
-async function buyKeyPackage(id){
-  const pkg = keyPackages.find(k => k.id === id);
-  if (!pkg) return;
-  await updateDoc(doc(db, 'users', currentUser.uid), { keys: increment(pkg.amount) });
-  await addDoc(collection(db, 'users', currentUser.uid, 'history'), {
-    type:'key', desc:`Compra de ${pkg.name} (+${pkg.amount} keys)`, value: pkg.price,
-    icon: pkg.icon, date: new Date().toLocaleString(), createdAt: serverTimestamp()
-  });
-  toast(`Compraste ${pkg.amount} Keys`);
-  await renderStore();
+function buyKeyPackage(){
+  const section = keyOfferSections.find(item => item.id === purchaseSelection.sectionId) || keyOfferSections[0];
+  const amount = Number(purchaseSelection.amount);
+  const client = String(purchaseSelection.client || '').trim();
+
+  if (!Number.isInteger(amount) || amount < 1 || amount > 5) {
+    toast('Selecciona una cantidad válida entre 1 y 5.', true);
+    return;
+  }
+
+  if (!client) {
+    toast('Escribe el nombre del cliente.', true);
+    return;
+  }
+
+  const selectedOption = section.durationOptions.find(option => option.days === purchaseSelection.durationDays) || section.durationOptions[0];
+  const durationLabel = getKeyDurationLabel(selectedOption.days);
+  const contentText = purchaseSelection.packageContent ? ` Contenido: ${purchaseSelection.packageContent}.` : ' Contenido: Sin especificar.';
+  const noteText = purchaseSelection.packageNote ? ` Notas: ${purchaseSelection.packageNote.trim()}.` : '';
+  const message = `Hola Julio, quiero ${amount} key${amount > 1 ? 's' : ''} de ${section.title.toUpperCase()} (${section.subtitle}) para el cliente ${client}. Duración: ${durationLabel}. Precio: ${money(selectedOption.price)} USD.${contentText}${noteText}`;
+  const waLink = `https://wa.me/+573135875113?text=${encodeURIComponent(message)}`;
+
+  window.open(waLink, '_blank', 'noopener,noreferrer');
+  toast('Se abrió WhatsApp para completar tu pedido.');
 }
 
 async function buyProduct(id){
   const p = products.find(x => x.id === id);
   if (!p) return;
   await refreshUserData();
-  if ((userData.keys ?? 0) < p.cost){
-    toast('No tienes suficientes Keys', true);
+  const balances = getKeyBalances(userData);
+  const availableBalance = p.currency === 'proxy' ? balances.proxyKeys : balances.apkKeys;
+  if (availableBalance < p.cost){
+    toast(`No tienes suficientes keys ${p.currency === 'proxy' ? 'Proxy' : 'APK'}`, true);
     return;
   }
-  await updateDoc(doc(db, 'users', currentUser.uid), { keys: increment(-p.cost) });
+  const balanceField = p.currency === 'proxy' ? 'proxyKeys' : 'apkKeys';
+  const updateData = { [balanceField]: increment(-p.cost), keys: increment(-p.cost) };
+  await updateDoc(doc(db, 'users', currentUser.uid), updateData);
   const date = new Date().toLocaleString();
-  await addDoc(collection(db, 'users', currentUser.uid, 'inventory'), { name: p.name, icon: p.icon, date, createdAt: serverTimestamp() });
-  await addDoc(collection(db, 'users', currentUser.uid, 'history'), { type:'product', desc:`Canjeado: ${p.name}`, value: p.cost, icon: p.icon, date, createdAt: serverTimestamp() });
+  const keyCode = generateKeyCode(p.currency === 'proxy' ? 'PROXY' : 'APK');
+  await addDoc(collection(db, 'users', currentUser.uid, 'inventory'), { name: p.name, icon: p.icon, image: p.image, currency: p.currency, code: keyCode, type:'product', date, createdAt: serverTimestamp() });
+  await addDoc(collection(db, 'users', currentUser.uid, 'history'), { type:'product', desc:`Canjeado: ${p.name}`, value: p.cost, currency: p.currency, icon: p.icon, date, createdAt: serverTimestamp() });
+  showCelebration('¡Clave generada!', `Tu canje quedó guardado y la clave es: ${keyCode}`, keyCode);
   toast(`Canjeaste: ${p.name}`);
   await renderStore();
 }
@@ -417,10 +641,128 @@ function initStoreView(){
   $('logoutBtn').addEventListener('click', async () => { await signOut(auth); });
 
   document.addEventListener('click', (e) => {
-    const buyKeyId = e.target.closest('[data-buykey]')?.getAttribute('data-buykey');
+    const keyCard = e.target.closest('[data-keycard]');
+    const durationButton = e.target.closest('[data-duration]');
+    const modalClose = e.target.closest('.modal-close');
+    const modalBackdrop = e.target.closest('.modal-backdrop');
     const buyProdId = e.target.closest('[data-buyproduct]')?.getAttribute('data-buyproduct');
-    if (buyKeyId) buyKeyPackage(buyKeyId);
-    if (buyProdId) buyProduct(buyProdId);
+    const completeBtn = e.target.closest('#completeOrderBtn');
+    const modalSubmit = e.target.closest('#modalSubmitBtn');
+
+    if (keyCard) {
+      const [sectionId, amount] = keyCard.getAttribute('data-keycard').split(':');
+      openPurchaseModal(sectionId, Number(amount));
+      return;
+    }
+
+    if (durationButton && e.target.closest('.modal-duration-grid')) {
+      purchaseSelection.durationDays = Number(durationButton.getAttribute('data-duration'));
+      const modal = $('purchaseModal');
+      if (modal) {
+        modal.querySelectorAll('.modal-duration-grid .duration-btn').forEach(btn => btn.classList.remove('active'));
+        durationButton.classList.add('active');
+      }
+      return;
+    }
+
+    if (modalClose || modalBackdrop) {
+      closePurchaseModal();
+      return;
+    }
+
+    if (modalSubmit) {
+      buyKeyPackage();
+      closePurchaseModal();
+      return;
+    }
+
+    if (completeBtn) {
+      buyKeyPackage();
+      return;
+    }
+
+    if (buyProdId) {
+      buyProduct(buyProdId);
+    }
+  });
+
+  document.addEventListener('input', (e) => {
+    if (e.target.id === 'clientNameModal') {
+      purchaseSelection.client = e.target.value;
+    }
+    if (e.target.id === 'packageContentSelect') {
+      purchaseSelection.packageContent = e.target.value;
+    }
+    if (e.target.id === 'packageNoteModal') {
+      purchaseSelection.packageNote = e.target.value;
+    }
+  });
+}
+
+function buildClaimView(code = ''){
+  return `
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">${iconBox('key',22)} Reclamar Keys</div>
+      <p class="auth-sub">Tu enlace de reclamo te dará APK o Proxy directamente en tu cuenta de Julio Ventas.</p>
+      <div class="field">
+        <label>Código de reclamo</label>
+        <div class="input-group">${svg('key',18)}<input id="claimCodeInput" value="${escapeHtml(code)}" placeholder="Código del enlace"></div>
+      </div>
+      <form id="claimAuthForm">
+        <div class="field">
+          <label>Correo electrónico</label>
+          <div class="input-group">${svg('mail',18)}<input type="email" id="claimEmail" required autocomplete="email"></div>
+        </div>
+        <div class="field">
+          <label>Contraseña</label>
+          <div class="input-group">${svg('lock',18)}<input type="password" id="claimPassword" required autocomplete="current-password"></div>
+        </div>
+        <button type="submit" class="btn">${svg('check',18)} Reclamar ahora</button>
+      </form>
+      <div class="auth-msg" id="claimMsg"></div>
+      <div class="auth-footer"><a href="/">Volver a la tienda</a></div>
+    </div>
+  </div>`;
+}
+
+async function claimLink(code, uid){
+  const ref = doc(db, 'claimLinks', code);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    throw new Error('El enlace ya no está activo.');
+  }
+  const data = snap.data();
+  if (data?.claimed) {
+    throw new Error('Este enlace ya fue reclamado.');
+  }
+  const field = data.type === 'proxy' ? 'proxyKeys' : 'apkKeys';
+  await updateDoc(doc(db, 'users', uid), { [field]: increment(data.amount || 1), keys: increment(data.amount || 1) });
+  await updateDoc(ref, { claimed: true, claimedBy: uid, claimedAt: serverTimestamp() });
+  await addDoc(collection(db, 'users', uid, 'history'), { type:'claim-link', desc:`Reclamo de keys: ${data.amount || 1} ${data.type?.toUpperCase() || 'APK'}`, value: data.amount || 1, currency: data.type || 'apk', date: new Date().toLocaleString(), createdAt: serverTimestamp() });
+}
+
+function initClaimView(){
+  $('app').innerHTML = buildClaimView(currentClaimCode);
+  const form = $('claimAuthForm');
+  const msg = $('claimMsg');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const code = $('claimCodeInput').value.trim();
+    if (!code) {
+      msg.className = 'auth-msg error';
+      msg.innerHTML = svg('alert',16) + ' Ingresa el código del reclamo.';
+      return;
+    }
+    try {
+      const cred = await signInWithEmailAndPassword(auth, $('claimEmail').value.trim(), $('claimPassword').value);
+      await claimLink(code, cred.user.uid);
+      msg.className = 'auth-msg ok';
+      msg.innerHTML = svg('check',16) + ' ¡Keys reclamadas correctamente!';
+    } catch (err) {
+      msg.className = 'auth-msg error';
+      msg.innerHTML = svg('alert',16) + ' ' + (err.message || 'No se pudo reclamar.');
+    }
   });
 }
 
@@ -429,6 +771,15 @@ function initStoreView(){
 // ---------------------------------------------------------------------
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
+  currentClaimCode = getClaimCodeFromLocation();
+  if (currentClaimCode) {
+    if (user) {
+      initClaimView();
+    } else {
+      initClaimView();
+    }
+    return;
+  }
   if (user) {
     initStoreView();
   } else {
