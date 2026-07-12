@@ -10,7 +10,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
 import {
   getFirestore, doc, setDoc, getDoc, updateDoc, increment,
-  collection, addDoc, getDocs, query, orderBy, serverTimestamp
+  collection, addDoc, getDocs, query, where, runTransaction, orderBy, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -859,7 +859,7 @@ function initStoreView(){
       return;
     }
 
-    if (redeemModalClose || redeemModalBackdrop) {
+    if (redeemModalClose) {
       closeRedeemModal();
       return;
     }
@@ -951,8 +951,8 @@ function buildClaimView(code = ''){
 
 async function claimLink(code, uid){
   const directRef = doc(db, 'claimLinks', code);
-  let snap = await getDoc(directRef);
   let ref = directRef;
+  let snap = await getDoc(directRef);
   let data = snap.exists() ? snap.data() : null;
   if (!data) {
     const q = query(collection(db, 'claimLinks'), where('code', '==', code));
@@ -963,33 +963,54 @@ async function claimLink(code, uid){
     const matched = qSnap.docs[0];
     ref = doc(db, 'claimLinks', matched.id);
     data = matched.data();
-    snap = matched;
   }
-  if (data?.claimed) {
-    throw new Error('Este enlace ya fue reclamado.');
-  }
-  const field = data.type === 'proxy' ? 'proxyKeys' : 'apkKeys';
+  const amount = Number(data.amount || 1);
+  const currentType = String(data.type || 'apk').toLowerCase();
+  const field = currentType === 'proxy' ? 'proxyKeys' : 'apkKeys';
   const durationDays = parseDurationDays(data.duration);
   const expiresAt = durationDays ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) : null;
-  const userSnap = await getDoc(doc(db, 'users', uid));
-  const userDataCurrent = userSnap.data() || {};
-  const currentActiveKeys = Array.isArray(userDataCurrent.activeKeys) ? userDataCurrent.activeKeys : [];
-  const currentType = String(data.type || 'apk').toLowerCase();
-  const nextActiveKey = {
-    type: currentType,
-    amount: Number(data.amount || 1),
-    durationDays,
-    expiresAt,
-    source: 'claim-link'
-  };
-  const mergedActiveKeys = [...currentActiveKeys.filter(entry => entry?.type !== currentType), nextActiveKey];
-  await updateDoc(doc(db, 'users', uid), {
-    [field]: increment(data.amount || 1),
-    keys: increment(data.amount || 1),
-    activeKeys: mergedActiveKeys
+
+  const result = await runTransaction(db, async (transaction) => {
+    const claimSnapshot = await transaction.get(ref);
+    const claimData = claimSnapshot.data();
+    if (!claimSnapshot.exists() || claimData?.claimed) {
+      throw new Error('Este enlace ya fue reclamado.');
+    }
+    const userRef = doc(db, 'users', uid);
+    const userSnap = await transaction.get(userRef);
+    const userDataCurrent = userSnap.exists() ? userSnap.data() : {};
+    const currentActiveKeys = Array.isArray(userDataCurrent.activeKeys) ? userDataCurrent.activeKeys : [];
+    const nextActiveKey = {
+      type: currentType,
+      amount,
+      durationDays,
+      expiresAt,
+      source: 'claim-link'
+    };
+    const mergedActiveKeys = [...currentActiveKeys.filter(entry => entry?.type !== currentType), nextActiveKey];
+    transaction.update(userRef, {
+      [field]: increment(amount),
+      keys: increment(amount),
+      activeKeys: mergedActiveKeys
+    });
+    transaction.update(ref, {
+      claimed: true,
+      claimedBy: uid,
+      claimedAt: serverTimestamp()
+    });
+    const historyRef = doc(collection(db, 'users', uid, 'history'));
+    transaction.set(historyRef, {
+      type: 'claim-link',
+      desc: `Reclamo de keys: ${amount} ${currentType.toUpperCase()}`,
+      value: amount,
+      currency: currentType,
+      date: new Date().toLocaleString(),
+      createdAt: serverTimestamp()
+    });
+    return { amount, type: currentType };
   });
-  await updateDoc(ref, { claimed: true, claimedBy: uid, claimedAt: serverTimestamp() });
-  await addDoc(collection(db, 'users', uid, 'history'), { type:'claim-link', desc:`Reclamo de keys: ${data.amount || 1} ${data.type?.toUpperCase() || 'APK'}`, value: data.amount || 1, currency: data.type || 'apk', date: new Date().toLocaleString(), createdAt: serverTimestamp() });
+
+  return result;
 }
 
 function initClaimView(){
@@ -1006,9 +1027,9 @@ function initClaimView(){
     try {
       msg.className = 'auth-msg';
       msg.innerHTML = '<span class="spinner"></span> Procesando reclamo...';
-      await claimLink(code, uid);
+      const result = await claimLink(code, uid);
       msg.className = 'auth-msg ok';
-      msg.innerHTML = svg('check',16) + ' ¡Keys reclamadas correctamente!';
+      msg.innerHTML = svg('check',16) + ` ¡${result.amount} ${result.type.toUpperCase()} reclamadas correctamente!`;
     } catch (err) {
       msg.className = 'auth-msg error';
       msg.innerHTML = svg('alert',16) + ' ' + (err.message || 'No se pudo reclamar.');

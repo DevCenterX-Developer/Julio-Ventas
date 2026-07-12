@@ -440,6 +440,26 @@ button, .btn{ font-family:inherit; }
   padding:26px;
   box-shadow:0 30px 80px rgba(0,0,0,.45);
   z-index:1;
+  max-height:calc(100vh - 72px);
+  display:flex;
+  flex-direction:column;
+}
+.modal-body{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+  overflow-y:auto;
+  padding-right:6px;
+}
+.modal-body::-webkit-scrollbar{
+  width:6px;
+}
+.modal-body::-webkit-scrollbar-track{
+  background:transparent;
+}
+.modal-body::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,.18);
+  border-radius:10px;
 }
 .modal-header{
   display:flex;
@@ -484,6 +504,15 @@ button, .btn{ font-family:inherit; }
   .package-row{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .modal-content{ padding:20px; }
   .modal-row{ flex-direction:column; align-items:flex-start; }
+  .header-right{ width:100%; justify-content:space-between; }
+  .pill{ width:100%; justify-content:center; }
+  .key-pill.total{ display:none; }
+  #tierlist .leaderboard-row{ flex-wrap:wrap; }
+  #tierlist .player-info{ min-width:100%; }
+  #tierlist .player-keys{ width:100%; flex-wrap:wrap; justify-content:flex-start; }
+  #tierlist .player-keys .currency-pill.total{ display:none; }
+  #tierlist .player-keys .currency-pill{ white-space:normal; }
+  .toast{ left:14px; right:14px; bottom:16px; max-width:none; }
 }
 
 /* ---------- TIERLIST ---------- */
@@ -605,6 +634,7 @@ footer{ text-align:center; padding:28px; color:var(--muted); font-size:.8rem; bo
   .brand{ font-size:1.2rem; }
   .header-right{ width:100%; justify-content:space-between; }
   .pill{ width:100%; justify-content:center; }
+  .key-pill.total{ display:none; }
   nav{ padding:12px 14px; gap:8px; top:60px; }
   nav button{ flex:1 1 calc(50% - 8px); justify-content:center; padding:10px 12px; font-size:.86rem; }
   nav button.active::after{ bottom:-10px; }
@@ -616,7 +646,13 @@ footer{ text-align:center; padding:28px; color:var(--muted); font-size:.8rem; bo
   .category-list{ grid-template-columns:1fr; }
   .amount-grid{ grid-template-columns:repeat(3, minmax(0, 1fr)); }
   .duration-btn{ flex-direction:column; align-items:flex-start; gap:3px; }
+  .client-field{ display:none; }
   .toast{ left:14px; right:14px; bottom:16px; max-width:none; }
+  #tierlist .leaderboard-row{ flex-wrap:wrap; }
+  #tierlist .player-info{ min-width:100%; }
+  #tierlist .player-keys{ width:100%; flex-wrap:wrap; justify-content:flex-start; }
+  #tierlist .player-keys .currency-pill.total{ display:none; }
+  #tierlist .player-keys .currency-pill{ white-space:normal; }
 }
 
 /* ---------- AUTH VIEW ---------- */

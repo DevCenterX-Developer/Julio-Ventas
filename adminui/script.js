@@ -44,7 +44,8 @@ const ICONS = {
   cart: `<circle cx="9" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/><path d="M2 3h2l2.4 12.2A2 2 0 0 0 8.4 17h8.2a2 2 0 0 0 2-1.6L21 7H6"/>`,
   wallet: `<path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3H5a2 2 0 0 1-2-2Z"/><path d="M3 7v11a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1h-4a2 2 0 0 0 0 4h4"/>`,
   gem: `<path d="M12 21 4 9l4-6h8l4 6Z"/><path d="M4 9h16M9 3l3 6 3-6M8.5 9 12 21l3.5-12"/>`,
-  menu: `<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>`
+  menu: `<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>`,
+  settings: `<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M19.4 13.6a7.92 7.92 0 0 0 0-3.2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.9 7.9 0 0 0-2.7-1.6L14 2.2a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.4 2.6a7.9 7.9 0 0 0-2.7 1.6l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6l2.1 1.6a7.92 7.92 0 0 0 0 3.2L2.1 15.2a.5.5 0 0 0-.1.6l2 3.5a.5.5 0 0 0 .6.2l2.5-1a7.9 7.9 0 0 0 2.7 1.6l.4 2.6a.5.5 0 0 0 .5.4h4a.5.5 0 0 0 .5-.4l.4-2.6a7.9 7.9 0 0 0 2.7-1.6l2.5 1a.5.5 0 0 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6l-2.1-1.6z"/>
 };
 function svg(name, size = 22, cls = "") {
   return `<svg class="icon ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ""}</svg>`;
@@ -273,10 +274,12 @@ function buildPanelView(){
             <input type="number" id="codeAmountInput" min="1" value="1">
           </label>
         </div>
-        <label class="field-inline full">
-          <span>Código</span>
-          <input type="text" id="codeValueInput" placeholder="Ej: CUBAN-APK-01">
-        </label>
+        <div id="codeValuesContainer" class="field-inline full">
+          <span>Códigos</span>
+          <div class="code-values-list">
+            <input type="text" class="code-value-input" placeholder="Ej: CUBAN-APK-01">
+          </div>
+        </div>
         <button id="createCodeBtn" class="btn">${svg('plus',16)} Guardar código</button>
         <div class="auth-msg" id="codeCreateMsg"></div>
       </div>
@@ -289,6 +292,37 @@ function buildPanelView(){
       </div>
     </section>
   </main>
+  <div id="editKeyModal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h3>${svg('settings',18)} Editar Keys</h3>
+          <p id="editKeyModalSubtitle">Agrega una entrada de keys y duración al usuario seleccionado.</p>
+        </div>
+        <button class="modal-close" type="button">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-row">
+          <div class="modal-label">Usuario</div>
+          <div id="editKeyUser" class="modal-value"></div>
+        </div>
+        <div class="modal-row">
+          <div class="modal-label">Tipo</div>
+          <div id="editKeyType" class="modal-value"></div>
+        </div>
+        <div class="field-inline">
+          <label>Cantidad</label>
+          <input type="number" id="editKeyAmount" min="1" value="1">
+        </div>
+        <div class="field-inline">
+          <label>Duración</label>
+          <select id="editKeyDuration"></select>
+        </div>
+      </div>
+      <button id="saveKeyModalBtn" class="btn">${svg('save',16)} Aplicar</button>
+    </div>
+  </div>
   <div class="toast" id="toast"></div>
   `;
 }
@@ -320,7 +354,10 @@ function renderTable(list){
               </select>
             </div>
           </div>
-          <button class="admin-batch-btn" data-add-apk-batch="${u.id}">+ entrada APK</button>
+          <div class="batch-actions">
+            <button class="admin-batch-btn" data-add-apk-batch="${u.id}">+ entrada APK</button>
+            <button class="iconbtn gear-btn" data-edit-keys="${u.id}:apk" type="button">${svg('settings',14)}</button>
+          </div>
         </div>
       </td>
       <td>
@@ -334,15 +371,14 @@ function renderTable(list){
               </select>
             </div>
           </div>
-          <button class="admin-batch-btn" data-add-proxy-batch="${u.id}">+ entrada Proxy</button>
+          <div class="batch-actions">
+            <button class="admin-batch-btn" data-add-proxy-batch="${u.id}">+ entrada Proxy</button>
+            <button class="iconbtn gear-btn" data-edit-keys="${u.id}:proxy" type="button">${svg('settings',14)}</button>
+          </div>
         </div>
       </td>
       <td class="row-actions">
-        <div class="row-actions-buttons">
-          <button data-save="${u.id}">${svg('save',14)} Guardar</button>
-          <button data-add-apk="${u.id}">${svg('plus',14)} +50 APK</button>
-          <button data-add-proxy="${u.id}">${svg('plus',14)} +50 Proxy</button>
-        </div>
+        <button data-save="${u.id}" class="save-only">${svg('save',14)} Guardar</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -394,23 +430,23 @@ function renderCodes(){
     list.innerHTML = '<div class="empty-card">No hay códigos guardados todavía.</div>';
     return;
   }
-  list.innerHTML = promoCodes.map(code => `
+  list.innerHTML = promoCodes.map(code => {
+    const codeValues = Array.isArray(code.codes) ? code.codes.join(', ') : code.value || '';
+    const label = Array.isArray(code.codes) && code.codes.length > 1
+      ? `${code.codes.length} códigos · ${codeValues}`
+      : codeValues;
+    return `
     <div class="stack-item">
       <div>
         <div class="stack-title">${code.client} · ${code.type.toUpperCase()} · ${formatDurationForType(code.type, code.duration)}</div>
-        <div class="stack-sub">${code.value} · ${code.amount} keys</div>
+        <div class="stack-sub">${label} · ${code.amount} keys</div>
       </div>
       <div class="stack-actions">
         <button data-delete-code="${code.id}">Eliminar</button>
       </div>
     </div>
-  `).join('');
-}
-
-async function loadUsers(){
-  const snap = await getDocs(collection(db, 'users'));
-  allUsers = [];
-  snap.forEach(d => allUsers.push({ id: d.id, ...d.data() }));
+  `;
+  }).join('');
   renderTable(allUsers);
   renderStats(allUsers);
 }
@@ -500,23 +536,34 @@ async function createPromoCode(){
   const type = $('codeTypeSelect').value;
   const duration = $('codeDurationSelect').value;
   const amount = Math.max(1, parseInt($('codeAmountInput').value, 10) || 1);
-  const value = $('codeValueInput').value.trim();
-  if (!value) {
+  const codeInputs = Array.from(document.querySelectorAll('.code-value-input'));
+  const codes = codeInputs.map(input => input.value.trim()).filter(Boolean);
+  if (!codes.length) {
     $('codeCreateMsg').className = 'auth-msg error';
-    $('codeCreateMsg').innerHTML = svg('alert',16) + ' Ingresa un código.';
+    $('codeCreateMsg').innerHTML = svg('alert',16) + ' Ingresa al menos un código.';
     return;
   }
   const ref = doc(collection(db, 'promoCodes'));
-  await setDoc(ref, { client, type, duration, amount, value, active: true, createdAt: new Date() });
+  await setDoc(ref, { client, type, duration, amount, codes, active: true, createdAt: new Date() });
   $('codeCreateMsg').className = 'auth-msg ok';
-  $('codeCreateMsg').innerHTML = svg('check',16) + ' Código guardado correctamente.';
+  $('codeCreateMsg').innerHTML = svg('check',16) + ' Código(s) guardado(s) correctamente.';
   await loadCodes();
+}
+
+function renderCodeValueFields(count = 1){
+  const container = document.querySelector('.code-values-list');
+  if (!container) return;
+  const sanitizedCount = Math.max(1, Math.min(10, Number(count) || 1));
+  container.innerHTML = Array.from({ length: sanitizedCount }).map((_, index) =>
+    `<input type="text" class="code-value-input" placeholder="Ej: CUBAN-APK-${String(index + 1).padStart(2,'0')}" />`
+  ).join('');
 }
 
 function initPanelView(user){
   $('app').innerHTML = buildPanelView();
   $('adminEmail').textContent = user.email;
   populateDurationSelects();
+  renderCodeValueFields(Number($('codeAmountInput').value) || 1);
   loadUsers();
   loadClaimLinks();
   loadCodes();
@@ -525,6 +572,7 @@ function initPanelView(user){
   $('createCodeBtn').addEventListener('click', createPromoCode);
   $('claimTypeSelect').addEventListener('change', () => populateDurationSelects());
   $('codeTypeSelect').addEventListener('change', () => populateDurationSelects());
+  $('codeAmountInput').addEventListener('input', () => renderCodeValueFields(Number($('codeAmountInput').value) || 1));
 
   $('menuToggle').addEventListener('click', () => {
     $('adminNav').classList.toggle('hidden');
@@ -549,6 +597,10 @@ function initPanelView(user){
     const addProxyId = e.target.closest('[data-add-proxy]')?.getAttribute('data-add-proxy');
     const addApkBatchId = e.target.closest('[data-add-apk-batch]')?.getAttribute('data-add-apk-batch');
     const addProxyBatchId = e.target.closest('[data-add-proxy-batch]')?.getAttribute('data-add-proxy-batch');
+    const editKeysTarget = e.target.closest('[data-edit-keys]')?.getAttribute('data-edit-keys');
+    const saveKeyModal = e.target.closest('#saveKeyModalBtn');
+    const editKeyModalClose = e.target.closest('#editKeyModal .modal-close');
+    const editKeyModalBackdrop = e.target.closest('#editKeyModal .modal-backdrop');
     const copyLinkId = e.target.closest('[data-copy-link]')?.getAttribute('data-copy-link');
     const editLinkId = e.target.closest('[data-edit-link]')?.getAttribute('data-edit-link');
     const deleteLinkId = e.target.closest('[data-delete-link]')?.getAttribute('data-delete-link');
@@ -596,6 +648,19 @@ function initPanelView(user){
       list.appendChild(row);
       return;
     }
+    if (editKeysTarget){
+      const [uid,type] = editKeysTarget.split(':');
+      openEditKeyModal(uid, type);
+      return;
+    }
+    if (editKeyModalClose || editKeyModalBackdrop){
+      closeEditKeyModal();
+      return;
+    }
+    if (saveKeyModal){
+      applyEditKeyModal();
+      return;
+    }
     if (copyLinkId){
       const link = claimLinks.find(item => item.id === copyLinkId);
       if (link) {
@@ -634,6 +699,55 @@ function initPanelView(user){
     const term = e.target.value.toLowerCase();
     renderTable(allUsers.filter(u => (u.email || '').toLowerCase().includes(term)));
   });
+
+  function fillEditKeyDurationOptions(type){
+    const options = type === 'proxy' ? proxyDurationOptions : claimDurationOptions;
+    $('editKeyDuration').innerHTML = options.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('');
+  }
+
+  function openEditKeyModal(uid, type){
+    const modal = $('editKeyModal');
+    if (!modal) return;
+    const user = allUsers.find(u => u.id === uid) || {};
+    modal.dataset.userId = uid;
+    modal.dataset.keyType = type;
+    $('editKeyUser').textContent = user.email || '(usuario)';
+    $('editKeyType').textContent = type.toUpperCase();
+    $('editKeyAmount').value = 1;
+    fillEditKeyDurationOptions(type);
+    modal.classList.remove('hidden');
+  }
+
+  function closeEditKeyModal(){
+    const modal = $('editKeyModal');
+    if (!modal) return;
+    modal.classList.add('hidden');
+  }
+
+  function applyEditKeyModal(){
+    const modal = $('editKeyModal');
+    if (!modal) return;
+    const uid = modal.dataset.userId;
+    const type = modal.dataset.keyType;
+    const amount = parseInt($('editKeyAmount').value, 10) || 1;
+    const duration = $('editKeyDuration').value;
+    if (!uid || !duration) return;
+    const list = document.querySelector(`[data-${type}-batch-list="${uid}"]`);
+    if (!list) return;
+    const index = list.querySelectorAll('.admin-batch-row').length;
+    const options = (type === 'proxy' ? proxyDurationOptions : claimDurationOptions)
+      .map(opt => `<option value="${opt.value}">${opt.label}</option>`)
+      .join('');
+    const row = document.createElement('div');
+    row.className = 'admin-batch-row';
+    row.innerHTML = `
+      <input type="number" min="0" value="${amount}" data-${type}-batch-amount="${uid}" data-batch-index="${index}">
+      <select data-${type}-batch-duration="${uid}" data-batch-index="${index}">
+        ${options}
+      </select>`;
+    list.appendChild(row);
+    closeEditKeyModal();
+  }
 
   $('logoutBtn').addEventListener('click', async () => { await signOut(auth); });
 }
