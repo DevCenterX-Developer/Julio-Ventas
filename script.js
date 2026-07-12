@@ -520,7 +520,6 @@ function validatePurchaseModal(){
   const submitBtn = $('modalSubmitBtn');
   
   const showType = hasContent;
-  const showSubmit = hasContent;
   const isComplete = hasClient && hasContent && hasType;
   
   if (typeField) {
@@ -528,8 +527,9 @@ function validatePurchaseModal(){
   }
   
   if (submitBtn) {
-    submitBtn.classList.toggle('hidden', !showSubmit);
+    submitBtn.classList.remove('hidden');
     submitBtn.disabled = !isComplete;
+    submitBtn.classList.toggle('inactive', !isComplete);
   }
 }
 
