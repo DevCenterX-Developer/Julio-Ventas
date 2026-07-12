@@ -309,12 +309,28 @@ function renderTable(list){
       <td>${u.isAdmin
         ? `<span class="role-tag admin">${svg('shield',13)} Admin</span>`
         : `<span class="role-tag user">${svg('user',13)} Usuario</span>`}</td>
-      <td><input type="number" min="0" value="${apkValue}" data-apk-input="${u.id}"></td>
-      <td><input type="number" min="0" value="${proxyValue}" data-proxy-input="${u.id}"></td>
+      <td>
+        <div class="admin-balance-field">
+          <input type="number" min="0" value="${apkValue}" data-apk-input="${u.id}">
+          <select data-apk-duration-select="${u.id}">
+            ${claimDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
+          </select>
+        </div>
+      </td>
+      <td>
+        <div class="admin-balance-field">
+          <input type="number" min="0" value="${proxyValue}" data-proxy-input="${u.id}">
+          <select data-proxy-duration-select="${u.id}">
+            ${proxyDurationOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
+          </select>
+        </div>
+      </td>
       <td class="row-actions">
-        <button data-save="${u.id}">${svg('save',14)} Guardar</button>
-        <button data-add-apk="${u.id}">${svg('plus',14)} +50 APK</button>
-        <button data-add-proxy="${u.id}">${svg('plus',14)} +50 Proxy</button>
+        <div class="row-actions-buttons">
+          <button data-save="${u.id}">${svg('save',14)} Guardar</button>
+          <button data-add-apk="${u.id}">${svg('plus',14)} +50 APK</button>
+          <button data-add-proxy="${u.id}">${svg('plus',14)} +50 Proxy</button>
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
@@ -383,10 +399,57 @@ async function loadUsers(){
   renderStats(allUsers);
 }
 
-async function saveKeys(uid, apkValue, proxyValue){
+function getDurationDays(durationValue = ''){
+  if (!durationValue) return 0;
+  if (String(durationValue).toUpperCase() === '1MES') return 30;
+  const match = String(durationValue).match(/(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
+function buildActiveKeyEntry(type, amount, durationValue){
+  const durationDays = getDurationDays(durationValue);
+  return {
+    type: String(type).toLowerCase(),
+    amount: Math.max(0, parseInt(amount, 10) || 0),
+    durationDays,
+    expiresAt: durationDays ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) : null,
+    source: 'admin-adjustment'
+  };
+}
+
+async function saveKeys(uid, apkValue, proxyValue, apkDuration, proxyDuration){
   const apkNum = Math.max(0, parseInt(apkValue, 10) || 0);
   const proxyNum = Math.max(0, parseInt(proxyValue, 10) || 0);
-  await updateDoc(doc(db, 'users', uid), { apkKeys: apkNum, proxyKeys: proxyNum, keys: apkNum + proxyNum });
+  if (apkNum > 0 && !apkDuration) {
+    toast('Selecciona la duración de la key APK.', true);
+    return;
+  }
+  if (proxyNum > 0 && !proxyDuration) {
+    toast('Selecciona la duración de la key Proxy.', true);
+    return;
+  }
+
+  const snap = await getDoc(doc(db, 'users', uid));
+  const currentData = snap.data() || {};
+  const currentApk = Number(currentData.apkKeys ?? currentData.keys ?? 0);
+  const currentProxy = Number(currentData.proxyKeys ?? 0);
+  const nextActiveKeys = Array.isArray(currentData.activeKeys) ? [...currentData.activeKeys] : [];
+  const apkDelta = apkNum - currentApk;
+  const proxyDelta = proxyNum - currentProxy;
+
+  if (apkDelta > 0 && apkDuration) {
+    nextActiveKeys.push(buildActiveKeyEntry('apk', apkDelta, apkDuration));
+  }
+  if (proxyDelta > 0 && proxyDuration) {
+    nextActiveKeys.push(buildActiveKeyEntry('proxy', proxyDelta, proxyDuration));
+  }
+
+  await updateDoc(doc(db, 'users', uid), {
+    apkKeys: apkNum,
+    proxyKeys: proxyNum,
+    keys: apkNum + proxyNum,
+    activeKeys: nextActiveKeys
+  });
   toast('Balances actualizados correctamente');
   await loadUsers();
 }
@@ -475,21 +538,27 @@ function initPanelView(user){
     if (saveId){
       const apkInput = document.querySelector(`[data-apk-input="${saveId}"]`);
       const proxyInput = document.querySelector(`[data-proxy-input="${saveId}"]`);
-      await saveKeys(saveId, apkInput.value, proxyInput.value);
+      const apkDuration = document.querySelector(`[data-apk-duration-select="${saveId}"]`)?.value || '1D';
+      const proxyDuration = document.querySelector(`[data-proxy-duration-select="${saveId}"]`)?.value || '3D';
+      await saveKeys(saveId, apkInput.value, proxyInput.value, apkDuration, proxyDuration);
     }
     if (addApkId){
       const apkInput = document.querySelector(`[data-apk-input="${addApkId}"]`);
       const proxyInput = document.querySelector(`[data-proxy-input="${addApkId}"]`);
+      const apkDuration = document.querySelector(`[data-apk-duration-select="${addApkId}"]`)?.value || '1D';
+      const proxyDuration = document.querySelector(`[data-proxy-duration-select="${addApkId}"]`)?.value || '3D';
       const newVal = (parseInt(apkInput.value, 10) || 0) + 50;
       apkInput.value = newVal;
-      await saveKeys(addApkId, newVal, proxyInput.value);
+      await saveKeys(addApkId, newVal, proxyInput.value, apkDuration, proxyDuration);
     }
     if (addProxyId){
       const apkInput = document.querySelector(`[data-apk-input="${addProxyId}"]`);
       const proxyInput = document.querySelector(`[data-proxy-input="${addProxyId}"]`);
+      const apkDuration = document.querySelector(`[data-apk-duration-select="${addProxyId}"]`)?.value || '1D';
+      const proxyDuration = document.querySelector(`[data-proxy-duration-select="${addProxyId}"]`)?.value || '3D';
       const newVal = (parseInt(proxyInput.value, 10) || 0) + 50;
       proxyInput.value = newVal;
-      await saveKeys(addProxyId, apkInput.value, newVal);
+      await saveKeys(addProxyId, apkInput.value, newVal, apkDuration, proxyDuration);
     }
     if (copyLinkId){
       const link = claimLinks.find(item => item.id === copyLinkId);
