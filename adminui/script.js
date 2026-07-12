@@ -166,6 +166,13 @@ function renderTable(list){
   list.forEach(u => {
     const apkValue = u.apkKeys ?? u.keys ?? 0;
     const proxyValue = u.proxyKeys ?? 0;
+    const activeEntries = Array.isArray(u.activeKeys) ? u.activeKeys : [];
+    const activeSummary = activeEntries.map(entry => {
+      const type = String(entry?.type || '').toUpperCase();
+      const amount = entry?.amount || 1;
+      const duration = entry?.durationDays ? `${entry.durationDays} D` : 'Sin tiempo';
+      return `<div class="admin-entry-pill">${type} · ${amount} key${amount > 1 ? 's' : ''} · ${duration}</div>`;
+    }).join('');
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${escapeHtml(u.email || '(sin correo)')}</td>
@@ -175,12 +182,14 @@ function renderTable(list){
       <td>
         <div class="admin-balance-field">
           <div class="admin-balance-pill">Saldo actual: ${apkValue}</div>
+          <div class="admin-entries-stack">${activeSummary}</div>
           <button class="iconbtn gear-btn" data-edit-keys="${u.id}:apk" type="button" title="Ajustar rápido APK">${svg('settings',14)}<span>Ajustar</span></button>
         </div>
       </td>
       <td>
         <div class="admin-balance-field">
           <div class="admin-balance-pill">Saldo actual: ${proxyValue}</div>
+          <div class="admin-entries-stack">${activeSummary}</div>
           <button class="iconbtn gear-btn" data-edit-keys="${u.id}:proxy" type="button" title="Ajustar rápido Proxy">${svg('settings',14)}<span>Ajustar</span></button>
         </div>
       </td>

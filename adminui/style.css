@@ -474,6 +474,8 @@ footer{ text-align:center; padding:28px; color:var(--muted); font-size:.8rem; bo
 .admin-batch-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px; }
 .admin-balance-field{ display:flex; flex-direction:column; gap:10px; }
 .admin-balance-field input[type="number"]{ max-width:140px; }
+.admin-entries-stack{ display:flex; flex-wrap:wrap; gap:6px; }
+.admin-entry-pill{ display:inline-flex; align-items:center; gap:6px; padding:6px 8px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); font-size:.75rem; color:var(--text); }
 .admin-nav{ width:100%; justify-content:flex-start; }
 .admin-nav-btn{ flex:1; min-width:160px; }
 @media (max-width:900px){
