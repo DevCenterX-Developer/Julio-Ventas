@@ -331,6 +331,22 @@ footer{ text-align:center; padding:28px; color:var(--muted); font-size:.8rem; bo
   box-shadow:var(--shadow), 0 0 60px -20px rgba(79,124,255,.35);
   animation:cardIn .5s var(--ease) both;
 }
+.loading-card{ max-width:460px; text-align:center; overflow:hidden; position:relative; }
+.loading-card::before{ content:''; position:absolute; inset:0; background:radial-gradient(circle at top, rgba(79,124,255,.16), transparent 55%); pointer-events:none; }
+.loading-orbit{ position:relative; width:96px; height:96px; margin:0 auto 20px; }
+.loading-ring{ position:absolute; inset:0; border:2px solid rgba(79,124,255,.24); border-top-color:var(--cyan); border-radius:50%; animation:spin 1.15s linear infinite; }
+.loading-ring.ring-two{ inset:10px; border-color:rgba(245,185,66,.24); border-top-color:var(--gold2); animation-duration:1.6s; animation-direction:reverse; }
+.loading-core{ position:absolute; inset:24px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); box-shadow:0 0 30px rgba(79,124,255,.35); animation:pulseCore 1.2s ease-in-out infinite; }
+.loading-brand{ justify-content:center; margin-bottom:10px; }
+.loading-title{ margin:0 0 8px; font-size:1.12rem; font-weight:800; color:var(--text); }
+.loading-subtitle{ margin:0 0 14px; color:var(--muted); font-size:.93rem; line-height:1.5; }
+.loading-bar{ height:8px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; margin:0 auto 12px; max-width:240px; }
+.loading-bar span{ display:block; width:28%; height:100%; border-radius:inherit; background:linear-gradient(90deg,var(--accent),var(--gold),var(--accent2)); animation:loadingBar 1.7s ease-in-out infinite; }
+.loading-dots{ display:flex; justify-content:center; gap:6px; margin-top:8px; }
+.loading-dots span{ width:8px; height:8px; border-radius:50%; background:var(--gold2); animation:dotPulse 1.15s ease-in-out infinite; }
+.loading-dots span:nth-child(2){ animation-delay:.2s; }
+.loading-dots span:nth-child(3){ animation-delay:.4s; }
+.loading-status{ margin-top:12px; color:var(--muted); font-size:.85rem; min-height:20px; }
 .auth-logo{
   display:flex; align-items:center; justify-content:center; gap:11px; margin-bottom:8px;
   font-family:'Sora',sans-serif; font-size:1.5rem; font-weight:800;
@@ -367,6 +383,9 @@ footer{ text-align:center; padding:28px; color:var(--muted); font-size:.8rem; bo
   animation:spin .7s linear infinite;
 }
 @keyframes spin{ to{ transform:rotate(360deg); } }
+@keyframes pulseCore{ 0%,100%{ transform:scale(.96); opacity:.9; } 50%{ transform:scale(1); opacity:1; } }
+@keyframes loadingBar{ 0%{ transform:translateX(-120%); } 100%{ transform:translateX(420%); } }
+@keyframes dotPulse{ 0%,80%,100%{ transform:translateY(0); opacity:.5; } 40%{ transform:translateY(-4px); opacity:1; } }
 
 /* ---------- ADMIN TABLE ---------- */
 .admin-table{ width:100%; border-collapse:collapse; background:var(--glass); backdrop-filter:blur(10px); border:1px solid var(--glass-brd); border-radius:var(--radius); overflow:hidden; }

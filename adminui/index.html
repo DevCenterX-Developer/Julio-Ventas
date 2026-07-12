@@ -10,10 +10,47 @@
 
 <div id="app">
   <div class="auth-wrap">
-    <div class="auth-card" style="text-align:center; color:var(--muted);">Cargando panel...</div>
+    <div class="auth-card loading-card" role="status" aria-live="polite">
+      <div class="loading-orbit" aria-hidden="true">
+        <div class="loading-ring"></div>
+        <div class="loading-ring ring-two"></div>
+        <div class="loading-core"></div>
+      </div>
+      <div class="auth-logo loading-brand">
+        <span class="icon-box" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 21 4 9l4-6h8l4 6Z"></path>
+            <path d="M4 9h16M9 3l3 6 3-6M8.5 9 12 21l3.5-12"></path>
+          </svg>
+        </span>
+        Julio Ventas · Admin
+      </div>
+      <p class="loading-title">Iniciando panel</p>
+      <p class="loading-subtitle">Verificando acceso y cargando herramientas...</p>
+      <div class="loading-bar"><span></span></div>
+      <div class="loading-dots" aria-hidden="true">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="loading-status" id="loadingStatus">Verificando permisos...</div>
+    </div>
   </div>
 </div>
 
+<script>
+  const loadingStatus = document.getElementById('loadingStatus');
+  if (loadingStatus) {
+    const steps = ['Verificando permisos...', 'Cargando datos...', 'Listo para administrar...'];
+    let index = 0;
+    const tick = () => {
+      loadingStatus.textContent = steps[index % steps.length];
+      index += 1;
+    };
+    tick();
+    setInterval(tick, 1200);
+  }
+</script>
 <script type="module" src="script.js"></script>
 
 </body>
