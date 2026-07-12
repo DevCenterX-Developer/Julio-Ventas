@@ -388,7 +388,7 @@ function buildStoreView(){
       <div class="grid" id="inventoryGrid"><p class="empty">Cargando...</p></div>
     </section>
   </main>
-  <footer>© 2026 Julio Ventas — Tienda no oficial de Free Fire. Solo con fines demostrativos.</footer>
+  <footer>© 2026 Julio Ventas</footer>
   <div class="toast" id="toast"></div>
   <div id="celebrationOverlay" class="celebration-overlay hidden">
     <div class="celebration-card">
@@ -428,8 +428,13 @@ function buildStoreView(){
           </select>
         </div>
         <div class="detail-field">
-          <label for="packageNoteModal">Notas adicionales</label>
-          <textarea id="packageNoteModal" class="client-input package-note" placeholder="Ej: incluir HG APK + DRIP para cuenta principal"></textarea>
+          <label for="packageNoteModal">Tipo</label>
+          <select id="packageNoteModal" class="client-input package-select">
+            <option value="">Selecciona una opción</option>
+            <option value="Drip">Drip</option>
+            <option value="Cuban">Cuban</option>
+            <option value="HG">HG</option>
+          </select>
         </div>
         <div class="modal-divider"></div>
         <div class="modal-row modal-row-tight">
@@ -525,7 +530,8 @@ function openPurchaseModal(sectionId, amount){
   const packageContentSelect = $('packageContentSelect');
   packageContentSelect.innerHTML = `<option value="">Selecciona una opción</option>${availableOptions.map(option => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join('')}`;
   packageContentSelect.value = purchaseSelection.packageContent || '';
-  $('packageNoteModal').value = purchaseSelection.packageNote;
+  const packageNoteSelect = $('packageNoteModal');
+  packageNoteSelect.value = purchaseSelection.packageNote || '';
 
   const durationGrid = modal.querySelector('.modal-duration-grid');
   durationGrid.innerHTML = section.durationOptions.map(option => `
@@ -731,7 +737,7 @@ function buyKeyPackage(){
   const selectedOption = section.durationOptions.find(option => option.days === purchaseSelection.durationDays) || section.durationOptions[0];
   const durationLabel = getKeyDurationLabel(selectedOption.days);
   const contentText = purchaseSelection.packageContent ? ` Contenido: ${purchaseSelection.packageContent}.` : ' Contenido: Sin especificar.';
-  const noteText = purchaseSelection.packageNote ? ` Notas: ${purchaseSelection.packageNote.trim()}.` : '';
+  const noteText = purchaseSelection.packageNote ? ` Tipo: ${purchaseSelection.packageNote.trim()}.` : '';
   const message = `Hola Julio, quiero ${amount} key${amount > 1 ? 's' : ''} de ${section.title.toUpperCase()} (${section.subtitle}) para el cliente ${client}. Duración: ${durationLabel}. Precio: ${money(selectedOption.price)} USD.${contentText}${noteText}`;
   const waLink = `https://wa.me/+573135875113?text=${encodeURIComponent(message)}`;
 
@@ -937,12 +943,12 @@ function initStoreView(){
     if (e.target.id === 'packageContentSelect') {
       purchaseSelection.packageContent = e.target.value;
     }
-    if (e.target.id === 'packageNoteModal') {
-      purchaseSelection.packageNote = e.target.value;
-    }
   });
 
   document.addEventListener('change', (e) => {
+    if (e.target.id === 'packageNoteModal') {
+      purchaseSelection.packageNote = e.target.value;
+    }
     if (e.target.id === 'redeemKeySelect') {
       redemptionSelection.activeKeyIndex = e.target.value ? Number(e.target.value) : null;
     }
