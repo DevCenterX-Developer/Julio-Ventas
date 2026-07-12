@@ -397,26 +397,26 @@ async function applyQuickKeyAdjustment(uid, type, amount, durationValue){
 }
 
 async function applyQuickKeyAdjustments(uid, type, adjustments){
-  const validAdjustments = adjustments.filter(item => Number(item.amount) > 0 && item.duration);
-  if (!validAdjustments.length) {
-    toast('Agrega al menos una cantidad para aplicar el ajuste.', true);
-    return;
-  }
+  const validAdjustments = adjustments.filter(item => item.duration);
+  const normalizedType = String(type || '').toLowerCase();
 
   try {
     const snap = await getDoc(doc(db, 'users', uid));
     const currentData = snap.data() || {};
-    let nextApk = Number(currentData.apkKeys ?? 0);
-    let nextProxy = Number(currentData.proxyKeys ?? 0);
-    const nextActiveKeys = Array.isArray(currentData.activeKeys) ? [...currentData.activeKeys] : [];
+    const currentActiveKeys = Array.isArray(currentData.activeKeys) ? [...currentData.activeKeys] : [];
+    const otherEntries = currentActiveKeys.filter(entry => String(entry?.type || '').toLowerCase() !== normalizedType);
 
-    validAdjustments.forEach(({ amount, duration }) => {
+    const nextEntries = validAdjustments.reduce((acc, { amount, duration }) => {
       const amountNum = Math.max(0, parseInt(amount, 10) || 0);
-      if (!amountNum || !duration) return;
-      nextActiveKeys.push(buildActiveKeyEntry(type, amountNum, duration));
-      if (type === 'apk') nextApk += amountNum;
-      if (type === 'proxy') nextProxy += amountNum;
-    });
+      if (!amountNum || !duration) return acc;
+      acc.push(buildActiveKeyEntry(type, amountNum, duration));
+      return acc;
+    }, []);
+
+    const nextActiveKeys = [...otherEntries, ...nextEntries];
+    const nextTypeTotal = nextEntries.reduce((sum, entry) => sum + Number(entry?.amount || 0), 0);
+    const nextApk = normalizedType === 'apk' ? nextTypeTotal : Number(currentData.apkKeys ?? 0);
+    const nextProxy = normalizedType === 'proxy' ? nextTypeTotal : Number(currentData.proxyKeys ?? 0);
 
     await updateDoc(doc(db, 'users', uid), {
       apkKeys: nextApk,
@@ -424,11 +424,11 @@ async function applyQuickKeyAdjustments(uid, type, adjustments){
       keys: nextApk + nextProxy,
       activeKeys: nextActiveKeys
     });
-    toast('Ajustes aplicados correctamente');
+    toast('Cambios guardados correctamente');
     await loadUsers();
   } catch (error) {
     console.error('No se pudo aplicar el ajuste:', error);
-    toast('No fue posible aplicar el ajuste. Revisa los permisos de Firestore.', true);
+    toast('No fue posible guardar los cambios. Revisa los permisos de Firestore.', true);
   }
 }
 
@@ -515,14 +515,28 @@ async function deleteProduct(id){
 // ---------------------------------------------------------------------
 // MODAL: EDITAR KEYS
 // ---------------------------------------------------------------------
-function fillEditKeyDurationOptions(type){
+function fillEditKeyDurationOptions(type, activeEntries = []){
   const options = type === 'proxy' ? proxyDurationOptions : claimDurationOptions;
   const container = $('editKeyDurationFields');
   if (!container) return;
+  const normalizedType = String(type || '').toLowerCase();
+  const existingAmounts = options.reduce((acc, opt) => {
+    const durationDays = getDurationDays(opt.value);
+    const totalForDuration = (activeEntries || []).reduce((sum, entry) => {
+      const entryType = String(entry?.type || '').toLowerCase();
+      const entryDurationDays = Number(entry?.durationDays || 0);
+      if (entryType === normalizedType && entryDurationDays === durationDays) {
+        return sum + Number(entry?.amount || 0);
+      }
+      return sum;
+    }, 0);
+    acc[opt.value] = totalForDuration;
+    return acc;
+  }, {});
   container.innerHTML = options.map(opt => `
     <div class="duration-row">
       <label class="duration-label">${escapeHtml(opt.label)}</label>
-      <input type="number" min="0" value="0" data-edit-duration-value="${opt.value}" placeholder="0">
+      <input type="number" min="0" value="${existingAmounts[opt.value] || 0}" data-edit-duration-value="${opt.value}" placeholder="0">
     </div>
   `).join('');
 }
@@ -536,11 +550,12 @@ function openEditKeyModal(uid, type){
     return;
   }
   const user = allUsers.find(u => u.id === uid) || {};
+  const activeEntries = Array.isArray(user.activeKeys) ? user.activeKeys : [];
   modal.dataset.userId = uid;
   modal.dataset.keyType = type;
   editUserEl.textContent = user.email || '(usuario)';
   editTypeEl.textContent = type.toUpperCase();
-  fillEditKeyDurationOptions(type);
+  fillEditKeyDurationOptions(type, activeEntries);
   modal.classList.remove('hidden');
 }
 
