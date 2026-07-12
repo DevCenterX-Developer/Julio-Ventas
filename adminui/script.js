@@ -2,6 +2,10 @@
 // ======================================================================
 // JULIO VENTAS — adminui/script.js
 // Panel exclusivo para administradores: gestión de Keys por usuario
+// La estructura visual vive en index.html, los estilos en style.css.
+// Este archivo SOLO contiene lógica: Firebase, eventos y el render de
+// listas cuyo contenido depende de datos (usuarios, productos, enlaces,
+// códigos), que por definición no pueden ser estáticos en el HTML.
 // ======================================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
@@ -26,8 +30,11 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+const $ = (id) => document.getElementById(id);
+
 // ---------------------------------------------------------------------
-// ICONOS SVG (sin emojis)
+// ICONOS SVG (solo se usan para construir filas/listas dinámicas;
+// el resto de la interfaz ya trae sus íconos escritos en index.html)
 // ---------------------------------------------------------------------
 const ICONS = {
   key: `<path d="M15 7a4 4 0 1 1-5.65 5.65L4 18v3h3v-2h2v-2h2l1.35-1.35A4 4 0 0 1 15 7Z"/><circle cx="15.5" cy="7.5" r="1.4"/>`,
@@ -46,7 +53,10 @@ const ICONS = {
   wallet: `<path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3H5a2 2 0 0 1-2-2Z"/><path d="M3 7v11a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1h-4a2 2 0 0 0 0 4h4"/>`,
   gem: `<path d="M12 21 4 9l4-6h8l4 6Z"/><path d="M4 9h16M9 3l3 6 3-6M8.5 9 12 21l3.5-12"/>`,
   menu: `<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>`,
-  settings: `<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M19.4 13.6a7.92 7.92 0 0 0 0-3.2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.9 7.9 0 0 0-2.7-1.6L14 2.2a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.4 2.6a7.9 7.9 0 0 0-2.7 1.6l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6l2.1 1.6a7.92 7.92 0 0 0 0 3.2L2.1 15.2a.5.5 0 0 0-.1.6l2 3.5a.5.5 0 0 0 .6.2l2.5-1a7.9 7.9 0 0 0 2.7 1.6l.4 2.6a.5.5 0 0 0 .5.4h4a.5.5 0 0 0 .5-.4l.4-2.6a7.9 7.9 0 0 0 2.7-1.6l2.5 1a.5.5 0 0 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6l-2.1-1.6z"/>
+  settings: `<path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/><path d="M19.4 13.6a7.92 7.92 0 0 0 0-3.2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.5a.5.5 0 0 0-.6-.2l-2.5 1a7.9 7.9 0 0 0-2.7-1.6L14 2.2a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.4 2.6a7.9 7.9 0 0 0-2.7 1.6l-2.5-1a.5.5 0 0 0-.6.2l-2 3.5a.5.5 0 0 0 .1.6l2.1 1.6a7.92 7.92 0 0 0 0 3.2L2.1 15.2a.5.5 0 0 0-.1.6l2 3.5a.5.5 0 0 0 .6.2l2.5-1a7.9 7.9 0 0 0 2.7 1.6l.4 2.6a.5.5 0 0 0 .5.4h4a.5.5 0 0 0 .5-.4l.4-2.6a7.9 7.9 0 0 0 2.7-1.6l2.5 1a.5.5 0 0 0 .6-.2l2-3.5a.5.5 0 0 0-.1-.6l-2.1-1.6z"/>`,
+  ticket: `<path d="M3 9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2 2 2 0 0 0 0 4 2 2 0 0 1-2 2H5a2 2 0 0 1-2-2 2 2 0 0 0 0-4Z"/><path d="M9 7v10" stroke-dasharray="2 3"/>`,
+  box: `<path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5M12 13v8"/>`,
+  diamond: `<path d="M12 21 4 9l4-6h8l4 6Z"/><path d="M4 9h16M9 3l3 6 3-6M8.5 9 12 21l3.5-12"/>`
 };
 function svg(name, size = 22, cls = "") {
   const className = cls ? 'icon ' + cls : 'icon';
@@ -54,10 +64,19 @@ function svg(name, size = 22, cls = "") {
 }
 function iconBox(name, size = 18){ return '<span class="icon-box">' + svg(name, size) + '</span>'; }
 
-const $ = (id) => document.getElementById(id);
+function escapeHtml(str){
+  return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// ---------------------------------------------------------------------
+// ESTADO
+// ---------------------------------------------------------------------
 let allUsers = [];
 let claimLinks = [];
 let promoCodes = [];
+let productsList = [];
 
 const claimDurationOptions = [
   { value: '1D', label: '1 D' },
@@ -99,33 +118,18 @@ function friendlyError(code){
 }
 
 // ---------------------------------------------------------------------
-// VISTA: LOGIN ADMIN
+// CONTROL DE VISTAS (mostrar/ocultar; el markup ya existe en index.html)
 // ---------------------------------------------------------------------
-function buildLoginView(){
-  return `
-  <div class="auth-wrap" id="authView">
-    <div class="auth-card">
-      <div class="auth-logo">${iconBox('shield',22)} Julio Ventas · Admin</div>
-      <p class="auth-sub">Acceso exclusivo para administradores de la tienda.</p>
-      <form id="adminLoginForm">
-        <div class="field">
-          <label>Correo electrónico</label>
-          <div class="input-group">${svg('mail',18)}<input type="email" id="email" required autocomplete="email"></div>
-        </div>
-        <div class="field">
-          <label>Contraseña</label>
-          <div class="input-group">${svg('lock',18)}<input type="password" id="password" required autocomplete="current-password"></div>
-        </div>
-        <button type="submit" class="btn">${svg('check',18)} Ingresar al panel</button>
-        <div class="auth-msg" id="authMsg"></div>
-      </form>
-      <div class="auth-footer"><a href="../index.html">Volver a la tienda</a></div>
-    </div>
-  </div>`;
+function showView(name){
+  ['loadingView', 'authView', 'deniedView', 'panelView'].forEach(id => {
+    $(id).classList.toggle('hidden', id !== name);
+  });
 }
 
-function initLoginView(){
-  $('app').innerHTML = buildLoginView();
+// ---------------------------------------------------------------------
+// LOGIN ADMIN
+// ---------------------------------------------------------------------
+function initAuthForm(){
   $('adminLoginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = $('email').value.trim();
@@ -143,222 +147,15 @@ function initLoginView(){
 }
 
 // ---------------------------------------------------------------------
-// VISTA: ACCESO DENEGADO
+// ACCESO DENEGADO
 // ---------------------------------------------------------------------
 function initDeniedView(){
-  $('app').innerHTML = `
-  <div class="access-denied">
-    <div class="icon-box">${svg('alert',30)}</div>
-    <h2>Acceso denegado</h2>
-    <p>Tu cuenta no tiene permisos de administrador.</p>
-    <button class="btn" style="max-width:220px; margin:18px auto 0;" id="backBtn">${svg('logout',16)} Cerrar sesión</button>
-  </div>`;
   $('backBtn').addEventListener('click', async () => { await signOut(auth); });
 }
 
 // ---------------------------------------------------------------------
-// VISTA: PANEL
+// USUARIOS
 // ---------------------------------------------------------------------
-function buildPanelView(){
-  return `
-  <header>
-    <div class="brand">${iconBox('shield',20)} Julio <span class="accent-word">Ventas</span> · Admin</div>
-    <div class="header-right">
-      <span class="user-tag" id="adminEmail"></span>
-      <button class="iconbtn" id="menuToggle">${svg('menu',16)} Menú</button>
-      <a href="../index.html" class="iconbtn">${svg('cart',16)} Ir a la tienda</a>
-      <button class="iconbtn" id="logoutBtn">${svg('logout',16)} Salir</button>
-    </div>
-  </header>
-  <nav class="admin-nav" id="adminNav">
-    <button class="admin-nav-btn active" data-section="users">${svg('users',16)} Usuarios</button>
-    <button class="admin-nav-btn" data-section="products">${svg('diamond',16)} Productos</button>
-    <button class="admin-nav-btn" data-section="claims">${svg('key',16)} Reclamar URL</button>
-    <button class="admin-nav-btn" data-section="codes">${svg('ticket',16)} Códigos</button>
-  </nav>
-  <main>
-    <section class="admin-section active" id="usersSection">
-      <div class="section-head">
-        <h2>${iconBox('users',18)} Gestión de APK y Proxy</h2>
-        <p class="subtext">Busca un usuario por correo y ajusta manualmente sus balances de APK y Proxy.</p>
-      </div>
-
-    <div class="stats-row">
-      <div class="stat-card"><div class="icon-wrap">${svg('users',22)}</div><div><div class="num" id="statUsers">0</div><div class="lbl">Usuarios registrados</div></div></div>
-      <div class="stat-card"><div class="icon-wrap">${svg('wallet',22)}</div><div><div class="num" id="statKeys">0</div><div class="lbl">Keys en circulación</div></div></div>
-      <div class="stat-card"><div class="icon-wrap">${svg('shield',22)}</div><div><div class="num" id="statAdmins">0</div><div class="lbl">Administradores</div></div></div>
-    </div>
-
-    <div class="search-bar">
-      ${svg('search',18)}
-      <input type="text" id="searchInput" placeholder="Buscar por correo...">
-    </div>
-
-    <table class="admin-table">
-      <thead>
-        <tr><th>Correo</th><th>Rol</th><th>APK</th><th>Proxy</th><th>Acciones</th></tr>
-      </thead>
-      <tbody id="usersTbody">
-        <tr><td colspan="5" class="empty">Cargando usuarios...</td></tr>
-      </tbody>
-    </table>
-
-    </section>
-
-    <section class="admin-section" id="productsSection">
-      <div class="section-head">
-        <h2>${iconBox('diamond',18)} Productos</h2>
-        <p class="subtext">Gestiona los productos que aparecen en la tienda (nombre, imagen, costo, moneda, tier).</p>
-      </div>
-      <div class="panel-card">
-        <div class="panel-card-head"><h3>Nuevo producto</h3></div>
-        <div class="grid-two">
-          <label class="field-inline"><span>Nombre</span><input id="productNameInput" class="client-input" placeholder="Nombre del producto"></label>
-          <label class="field-inline"><span>Imagen (URL)</span><input id="productImageInput" class="client-input" placeholder="https://.../img.jpg"></label>
-        </div>
-        <div class="grid-two">
-          <label class="field-inline"><span>Costo</span><input type="number" id="productCostInput" min="0" value="1" class="client-input"></label>
-          <label class="field-inline"><span>Moneda</span><select id="productCurrencySelect" class="client-input"><option value="apk">APK</option><option value="proxy">Proxy</option></select></label>
-        </div>
-        <div class="grid-two">
-          <label class="field-inline"><span>Tier</span><input id="productTierInput" class="client-input" placeholder="S"></label>
-          <label class="field-inline"><span>Icon (opcional)</span><input id="productIconInput" class="client-input" placeholder="diamond, paw..."></label>
-        </div>
-        <button id="createProductBtn" class="btn">${svg('plus',16)} Crear producto</button>
-        <div class="auth-msg" id="productCreateMsg"></div>
-      </div>
-
-      <div class="panel-card" style="margin-top:18px;">
-        <div class="panel-card-head"><h3>Productos guardados</h3></div>
-        <div id="productsPanelList" class="stack-list"></div>
-      </div>
-    </section>
-
-    <section class="admin-section" id="claimsSection">
-      <div class="section-head">
-        <h2>${iconBox('key',18)} Reclamar URL</h2>
-        <p class="subtext">Crea enlaces para entregar APK o Proxy a un usuario y que lo reclame desde la web.</p>
-      </div>
-
-      <div class="panel-card">
-        <div class="panel-card-head">
-          <h3>Nuevo enlace de reclamo</h3>
-        </div>
-        <div class="grid-two">
-          <label class="field-inline">
-            <span>Tipo</span>
-            <select id="claimTypeSelect">
-              <option value="apk">APK</option>
-              <option value="proxy">Proxy</option>
-            </select>
-          </label>
-          <label class="field-inline">
-            <span>Duración</span>
-            <select id="claimDurationSelect"></select>
-          </label>
-        </div>
-        <label class="field-inline full">
-          <span>Cantidad de keys</span>
-          <input type="number" id="claimAmountInput" min="1" value="1">
-        </label>
-        <button id="createClaimBtn" class="btn">${svg('plus',16)} Crear URL</button>
-        <div class="auth-msg" id="claimCreateMsg"></div>
-      </div>
-
-      <div class="panel-card" style="margin-top:18px;">
-        <div class="panel-card-head">
-          <h3>Enlaces existentes</h3>
-        </div>
-        <div id="claimLinksList" class="stack-list"></div>
-      </div>
-    </section>
-
-    <section class="admin-section" id="codesSection">
-      <div class="section-head">
-        <h2>${iconBox('ticket',18)} Códigos</h2>
-        <p class="subtext">Gestiona códigos para clientes CUBAN, HG y DRIP con duración cerrada y tipo APK/Proxy.</p>
-      </div>
-
-      <div class="panel-card">
-        <div class="panel-card-head">
-          <h3>Agregar código</h3>
-        </div>
-        <div class="grid-two">
-          <label class="field-inline">
-            <span>Cliente</span>
-            <select id="codeClientSelect"></select>
-          </label>
-          <label class="field-inline">
-            <span>Tipo</span>
-            <select id="codeTypeSelect">
-              <option value="apk">APK</option>
-              <option value="proxy">Proxy</option>
-            </select>
-          </label>
-        </div>
-        <div class="grid-two">
-          <label class="field-inline">
-            <span>Duración</span>
-            <select id="codeDurationSelect"></select>
-          </label>
-          <label class="field-inline">
-            <span>Keys</span>
-            <input type="number" id="codeAmountInput" min="1" value="1">
-          </label>
-        </div>
-        <div id="codeValuesContainer" class="field-inline full">
-          <span>Códigos</span>
-          <div class="code-values-list">
-            <input type="text" class="code-value-input" placeholder="Ej: CUBAN-APK-01">
-          </div>
-        </div>
-        <button id="createCodeBtn" class="btn">${svg('plus',16)} Guardar código</button>
-        <div class="auth-msg" id="codeCreateMsg"></div>
-      </div>
-
-      <div class="panel-card" style="margin-top:18px;">
-        <div class="panel-card-head">
-          <h3>Códigos guardados</h3>
-        </div>
-        <div id="codesList" class="stack-list"></div>
-      </div>
-    </section>
-  </main>
-  <div id="editKeyModal" class="modal hidden">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <div>
-          <h3>${svg('settings',18)} Editar Keys</h3>
-          <p id="editKeyModalSubtitle">Agrega una entrada de keys y duración al usuario seleccionado.</p>
-        </div>
-        <button class="modal-close" type="button">×</button>
-      </div>
-      <div class="modal-body">
-        <div class="modal-row">
-          <div class="modal-label">Usuario</div>
-          <div id="editKeyUser" class="modal-value"></div>
-        </div>
-        <div class="modal-row">
-          <div class="modal-label">Tipo</div>
-          <div id="editKeyType" class="modal-value"></div>
-        </div>
-        <div class="field-inline">
-          <label>Cantidad</label>
-          <input type="number" id="editKeyAmount" min="1" value="1">
-        </div>
-        <div class="field-inline">
-          <label>Duración</label>
-          <select id="editKeyDuration"></select>
-        </div>
-      </div>
-      <button id="saveKeyModalBtn" class="btn">${svg('save',16)} Aplicar</button>
-    </div>
-  </div>
-  <div class="toast" id="toast"></div>
-  `;
-}
-
 function renderTable(list){
   const tbody = $('usersTbody');
   if (list.length === 0){
@@ -371,7 +168,7 @@ function renderTable(list){
     const proxyValue = u.proxyKeys ?? 0;
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${u.email || '(sin correo)'}</td>
+      <td>${escapeHtml(u.email || '(sin correo)')}</td>
       <td>${u.isAdmin
         ? `<span class="role-tag admin">${svg('shield',13)} Admin</span>`
         : `<span class="role-tag user">${svg('user',13)} Usuario</span>`}</td>
@@ -442,6 +239,9 @@ function populateDurationSelects(){
   $('codeClientSelect').innerHTML = clientOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('');
 }
 
+// ---------------------------------------------------------------------
+// RECLAMAR URL
+// ---------------------------------------------------------------------
 function renderClaimLinks(){
   const list = $('claimLinksList');
   if (!claimLinks.length){
@@ -452,7 +252,7 @@ function renderClaimLinks(){
     <div class="stack-item">
       <div>
         <div class="stack-title">${link.type.toUpperCase()} · ${formatDurationForType(link.type, link.duration)}</div>
-        <div class="stack-sub">${link.amount} keys · ${link.code}</div>
+        <div class="stack-sub">${link.amount} keys · ${escapeHtml(link.code)}</div>
       </div>
       <div class="stack-actions">
         <button data-copy-link="${link.id}">Copiar</button>
@@ -463,6 +263,30 @@ function renderClaimLinks(){
   `).join('');
 }
 
+async function loadClaimLinks(){
+  const snap = await getDocs(collection(db, 'claimLinks'));
+  claimLinks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderClaimLinks();
+}
+
+async function createClaimLink(){
+  const type = $('claimTypeSelect').value;
+  const duration = $('claimDurationSelect').value;
+  const amount = Math.max(1, parseInt($('claimAmountInput').value, 10) || 1);
+  const code = `claim-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  const ref = doc(db, 'claimLinks', code);
+  await setDoc(ref, { type, duration, amount, code, claimed: false, createdAt: new Date() });
+  const baseUrl = 'https://juliojl.vercel.app';
+  const claimUrl = `${baseUrl}/claim/?claim=${code}`;
+  await navigator.clipboard.writeText(claimUrl);
+  $('claimCreateMsg').className = 'auth-msg ok';
+  $('claimCreateMsg').innerHTML = svg('check',16) + ' URL creada y copiada: ' + escapeHtml(claimUrl);
+  await loadClaimLinks();
+}
+
+// ---------------------------------------------------------------------
+// CÓDIGOS
+// ---------------------------------------------------------------------
 function renderCodes(){
   const list = $('codesList');
   if (!promoCodes.length){
@@ -478,7 +302,7 @@ function renderCodes(){
     <div class="stack-item">
       <div>
         <div class="stack-title">${code.client} · ${code.type.toUpperCase()} · ${formatDurationForType(code.type, code.duration)}</div>
-        <div class="stack-sub">${label} · ${code.amount} keys</div>
+        <div class="stack-sub">${escapeHtml(label)} · ${code.amount} keys</div>
       </div>
       <div class="stack-actions">
         <button data-delete-code="${code.id}">Eliminar</button>
@@ -490,6 +314,43 @@ function renderCodes(){
   renderStats(allUsers);
 }
 
+async function loadCodes(){
+  const snap = await getDocs(collection(db, 'promoCodes'));
+  promoCodes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  renderCodes();
+}
+
+async function createPromoCode(){
+  const client = $('codeClientSelect').value;
+  const type = $('codeTypeSelect').value;
+  const duration = $('codeDurationSelect').value;
+  const amount = Math.max(1, parseInt($('codeAmountInput').value, 10) || 1);
+  const codeInputs = Array.from(document.querySelectorAll('.code-value-input'));
+  const codes = codeInputs.map(input => input.value.trim()).filter(Boolean);
+  if (!codes.length) {
+    $('codeCreateMsg').className = 'auth-msg error';
+    $('codeCreateMsg').innerHTML = svg('alert',16) + ' Ingresa al menos un código.';
+    return;
+  }
+  const ref = doc(collection(db, 'promoCodes'));
+  await setDoc(ref, { client, type, duration, amount, codes, active: true, createdAt: new Date() });
+  $('codeCreateMsg').className = 'auth-msg ok';
+  $('codeCreateMsg').innerHTML = svg('check',16) + ' Código(s) guardado(s) correctamente.';
+  await loadCodes();
+}
+
+function renderCodeValueFields(count = 1){
+  const container = document.querySelector('.code-values-list');
+  if (!container) return;
+  const sanitizedCount = Math.max(1, Math.min(10, Number(count) || 1));
+  container.innerHTML = Array.from({ length: sanitizedCount }).map((_, index) =>
+    `<input type="text" class="code-value-input" placeholder="Ej: CUBAN-APK-${String(index + 1).padStart(2,'0')}" />`
+  ).join('');
+}
+
+// ---------------------------------------------------------------------
+// KEYS / BALANCES
+// ---------------------------------------------------------------------
 function getDurationDays(durationValue = ''){
   if (!durationValue) return 0;
   if (String(durationValue).toUpperCase() === '1MES') return 30;
@@ -511,7 +372,7 @@ function buildActiveKeyEntry(type, amount, durationValue){
 function collectBatchEntries(uid, type){
   const list = document.querySelector(`[data-${type}-batch-list="${uid}"]`);
   if (!list) return [];
-  return Array.from(list.querySelectorAll('.admin-batch-row')).map((row, index) => {
+  return Array.from(list.querySelectorAll('.admin-batch-row')).map((row) => {
     const amountInput = row.querySelector(`[data-${type}-batch-amount="${uid}"]`);
     const durationSelect = row.querySelector(`[data-${type}-batch-duration="${uid}"]`);
     const amount = parseInt(amountInput?.value || '0', 10) || 0;
@@ -543,21 +404,9 @@ async function saveKeys(uid, apkValue, proxyValue){
   await loadUsers();
 }
 
-async function loadClaimLinks(){
-  const snap = await getDocs(collection(db, 'claimLinks'));
-  claimLinks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  renderClaimLinks();
-}
-
-async function loadCodes(){
-  const snap = await getDocs(collection(db, 'promoCodes'));
-  promoCodes = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-  renderCodes();
-}
-
-// ---------- PRODUCTS (admin) ----------
-let productsList = [];
-
+// ---------------------------------------------------------------------
+// PRODUCTOS
+// ---------------------------------------------------------------------
 async function loadProducts(){
   const snap = await getDocs(collection(db, 'products'));
   productsList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -579,7 +428,7 @@ function renderProductsPanel(){
         </div>
         <div>
           <div class="stack-title">${escapeHtml(p.name)} · ${p.currency?.toUpperCase() || ''} · ${p.cost || 0}</div>
-          <div class="stack-sub">Tier: ${escapeHtml(p.tier || '')} · ID: ${p.id}</div>
+          <div class="stack-sub">Tier: ${escapeHtml(p.tier || '')} · ID: ${escapeHtml(p.id)}</div>
         </div>
       </div>
       <div class="stack-actions">
@@ -607,7 +456,7 @@ async function createProduct(){
   const payload = { name, image, cost, currency, tier, icon, updatedAt: new Date() };
   if (editingId){
     await updateProduct(editingId, payload);
-    btn.textContent = `${svg('plus',16)} Crear producto`;
+    btn.innerHTML = svg('plus',16) + ' Crear producto';
     delete btn.dataset.editing;
     $('productCreateMsg').className = 'auth-msg ok';
     $('productCreateMsg').textContent = 'Producto actualizado.';
@@ -635,60 +484,62 @@ async function deleteProduct(id){
   await loadProducts();
 }
 
-async function createClaimLink(){
-  const type = $('claimTypeSelect').value;
-  const duration = $('claimDurationSelect').value;
-  const amount = Math.max(1, parseInt($('claimAmountInput').value, 10) || 1);
-  const code = `claim-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
-  const ref = doc(db, 'claimLinks', code);
-  await setDoc(ref, { type, duration, amount, code, claimed: false, createdAt: new Date() });
-  const baseUrl = 'https://juliojl.vercel.app';
-  const claimUrl = `${baseUrl}/claim/?claim=${code}`;
-  await navigator.clipboard.writeText(claimUrl);
-  $('claimCreateMsg').className = 'auth-msg ok';
-  $('claimCreateMsg').innerHTML = svg('check',16) + ' URL creada y copiada: ' + claimUrl;
-  await loadClaimLinks();
+// ---------------------------------------------------------------------
+// MODAL: EDITAR KEYS
+// ---------------------------------------------------------------------
+function fillEditKeyDurationOptions(type){
+  const options = type === 'proxy' ? proxyDurationOptions : claimDurationOptions;
+  $('editKeyDuration').innerHTML = options.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('');
 }
 
-async function createPromoCode(){
-  const client = $('codeClientSelect').value;
-  const type = $('codeTypeSelect').value;
-  const duration = $('codeDurationSelect').value;
-  const amount = Math.max(1, parseInt($('codeAmountInput').value, 10) || 1);
-  const codeInputs = Array.from(document.querySelectorAll('.code-value-input'));
-  const codes = codeInputs.map(input => input.value.trim()).filter(Boolean);
-  if (!codes.length) {
-    $('codeCreateMsg').className = 'auth-msg error';
-    $('codeCreateMsg').innerHTML = svg('alert',16) + ' Ingresa al menos un código.';
-    return;
-  }
-  const ref = doc(collection(db, 'promoCodes'));
-  await setDoc(ref, { client, type, duration, amount, codes, active: true, createdAt: new Date() });
-  $('codeCreateMsg').className = 'auth-msg ok';
-  $('codeCreateMsg').innerHTML = svg('check',16) + ' Código(s) guardado(s) correctamente.';
-  await loadCodes();
+function openEditKeyModal(uid, type){
+  const modal = $('editKeyModal');
+  if (!modal) return;
+  const user = allUsers.find(u => u.id === uid) || {};
+  modal.dataset.userId = uid;
+  modal.dataset.keyType = type;
+  $('editKeyUser').textContent = user.email || '(usuario)';
+  $('editKeyType').textContent = type.toUpperCase();
+  $('editKeyAmount').value = 1;
+  fillEditKeyDurationOptions(type);
+  modal.classList.remove('hidden');
 }
 
-function renderCodeValueFields(count = 1){
-  const container = document.querySelector('.code-values-list');
-  if (!container) return;
-  const sanitizedCount = Math.max(1, Math.min(10, Number(count) || 1));
-  container.innerHTML = Array.from({ length: sanitizedCount }).map((_, index) =>
-    `<input type="text" class="code-value-input" placeholder="Ej: CUBAN-APK-${String(index + 1).padStart(2,'0')}" />`
-  ).join('');
+function closeEditKeyModal(){
+  const modal = $('editKeyModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
 }
 
-function initPanelView(user){
-  $('app').innerHTML = buildPanelView();
-  $('adminEmail').textContent = user.email;
-  populateDurationSelects();
-  renderCodeValueFields(Number($('codeAmountInput').value) || 1);
-  if (window.innerWidth < 900) $('adminNav').classList.add('hidden');
-  loadUsers();
-  loadProducts();
-  loadClaimLinks();
-  loadCodes();
+function applyEditKeyModal(){
+  const modal = $('editKeyModal');
+  if (!modal) return;
+  const uid = modal.dataset.userId;
+  const type = modal.dataset.keyType;
+  const amount = parseInt($('editKeyAmount').value, 10) || 1;
+  const duration = $('editKeyDuration').value;
+  if (!uid || !duration) return;
+  const list = document.querySelector(`[data-${type}-batch-list="${uid}"]`);
+  if (!list) return;
+  const index = list.querySelectorAll('.admin-batch-row').length;
+  const options = (type === 'proxy' ? proxyDurationOptions : claimDurationOptions)
+    .map(opt => `<option value="${opt.value}">${opt.label}</option>`)
+    .join('');
+  const row = document.createElement('div');
+  row.className = 'admin-batch-row';
+  row.innerHTML = `
+    <input type="number" min="0" value="${amount}" data-${type}-batch-amount="${uid}" data-batch-index="${index}">
+    <select data-${type}-batch-duration="${uid}" data-batch-index="${index}">
+      ${options}
+    </select>`;
+  list.appendChild(row);
+  closeEditKeyModal();
+}
 
+// ---------------------------------------------------------------------
+// PANEL: EVENTOS (se registran una sola vez, el HTML ya existe siempre)
+// ---------------------------------------------------------------------
+function wirePanelEvents(){
   $('createClaimBtn').addEventListener('click', createClaimLink);
   $('createCodeBtn').addEventListener('click', createPromoCode);
   $('createProductBtn').addEventListener('click', createProduct);
@@ -723,8 +574,6 @@ function initPanelView(user){
 
   document.addEventListener('click', async (e) => {
     const saveId = e.target.closest('[data-save]')?.getAttribute('data-save');
-    const addApkId = e.target.closest('[data-add-apk]')?.getAttribute('data-add-apk');
-    const addProxyId = e.target.closest('[data-add-proxy]')?.getAttribute('data-add-proxy');
     const addApkBatchId = e.target.closest('[data-add-apk-batch]')?.getAttribute('data-add-apk-batch');
     const addProxyBatchId = e.target.closest('[data-add-proxy-batch]')?.getAttribute('data-add-proxy-batch');
     const editKeysTarget = e.target.closest('[data-edit-keys]')?.getAttribute('data-edit-keys');
@@ -742,18 +591,6 @@ function initPanelView(user){
       const apkInput = document.querySelector(`[data-apk-input="${saveId}"]`);
       const proxyInput = document.querySelector(`[data-proxy-input="${saveId}"]`);
       await saveKeys(saveId, apkInput.value, proxyInput.value);
-    }
-    if (addApkId){
-      const apkInput = document.querySelector(`[data-apk-input="${addApkId}"]`);
-      const newVal = (parseInt(apkInput.value, 10) || 0) + 50;
-      apkInput.value = newVal;
-      await saveKeys(addApkId, newVal, document.querySelector(`[data-proxy-input="${addApkId}"]`).value);
-    }
-    if (addProxyId){
-      const proxyInput = document.querySelector(`[data-proxy-input="${addProxyId}"]`);
-      const newVal = (parseInt(proxyInput.value, 10) || 0) + 50;
-      proxyInput.value = newVal;
-      await saveKeys(addProxyId, document.querySelector(`[data-apk-input="${addProxyId}"]`).value, newVal);
     }
     if (addApkBatchId){
       const list = document.querySelector(`[data-apk-batch-list="${addApkBatchId}"]`);
@@ -782,7 +619,7 @@ function initPanelView(user){
       return;
     }
     if (editKeysTarget){
-      const [uid,type] = editKeysTarget.split(':');
+      const [uid, type] = editKeysTarget.split(':');
       openEditKeyModal(uid, type);
       return;
     }
@@ -844,7 +681,7 @@ function initPanelView(user){
         $('claimDurationSelect').value = link.duration;
         $('claimAmountInput').value = link.amount;
         $('claimCreateMsg').className = 'auth-msg';
-        $('claimCreateMsg').innerHTML = svg('key',16) + ' Editando enlace: ' + link.code;
+        $('claimCreateMsg').innerHTML = svg('key',16) + ' Editando enlace: ' + escapeHtml(link.code);
       }
     }
   });
@@ -854,71 +691,37 @@ function initPanelView(user){
     renderTable(allUsers.filter(u => (u.email || '').toLowerCase().includes(term)));
   });
 
-  function fillEditKeyDurationOptions(type){
-    const options = type === 'proxy' ? proxyDurationOptions : claimDurationOptions;
-    $('editKeyDuration').innerHTML = options.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('');
-  }
-
-  function openEditKeyModal(uid, type){
-    const modal = $('editKeyModal');
-    if (!modal) return;
-    const user = allUsers.find(u => u.id === uid) || {};
-    modal.dataset.userId = uid;
-    modal.dataset.keyType = type;
-    $('editKeyUser').textContent = user.email || '(usuario)';
-    $('editKeyType').textContent = type.toUpperCase();
-    $('editKeyAmount').value = 1;
-    fillEditKeyDurationOptions(type);
-    modal.classList.remove('hidden');
-  }
-
-  function closeEditKeyModal(){
-    const modal = $('editKeyModal');
-    if (!modal) return;
-    modal.classList.add('hidden');
-  }
-
-  function applyEditKeyModal(){
-    const modal = $('editKeyModal');
-    if (!modal) return;
-    const uid = modal.dataset.userId;
-    const type = modal.dataset.keyType;
-    const amount = parseInt($('editKeyAmount').value, 10) || 1;
-    const duration = $('editKeyDuration').value;
-    if (!uid || !duration) return;
-    const list = document.querySelector(`[data-${type}-batch-list="${uid}"]`);
-    if (!list) return;
-    const index = list.querySelectorAll('.admin-batch-row').length;
-    const options = (type === 'proxy' ? proxyDurationOptions : claimDurationOptions)
-      .map(opt => `<option value="${opt.value}">${opt.label}</option>`)
-      .join('');
-    const row = document.createElement('div');
-    row.className = 'admin-batch-row';
-    row.innerHTML = `
-      <input type="number" min="0" value="${amount}" data-${type}-batch-amount="${uid}" data-batch-index="${index}">
-      <select data-${type}-batch-duration="${uid}" data-batch-index="${index}">
-        ${options}
-      </select>`;
-    list.appendChild(row);
-    closeEditKeyModal();
-  }
-
   $('logoutBtn').addEventListener('click', async () => { await signOut(auth); });
 }
 
 // ---------------------------------------------------------------------
 // ARRANQUE
 // ---------------------------------------------------------------------
+initAuthForm();
+initDeniedView();
+wirePanelEvents();
+
 onAuthStateChanged(auth, async (user) => {
   if (!user){
-    initLoginView();
+    showView('authView');
     return;
   }
   const snap = await getDoc(doc(db, 'users', user.uid));
   const data = snap.data();
   if (!data?.isAdmin){
-    initDeniedView();
+    showView('deniedView');
     return;
   }
-  initPanelView(user);
+
+  $('adminEmail').textContent = user.email;
+  showView('panelView');
+  populateDurationSelects();
+  renderCodeValueFields(Number($('codeAmountInput').value) || 1);
+  if (window.innerWidth < 900) $('adminNav').classList.add('hidden');
+  else $('adminNav').classList.remove('hidden');
+
+  loadUsers();
+  loadProducts();
+  loadClaimLinks();
+  loadCodes();
 });

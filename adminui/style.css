@@ -569,3 +569,6 @@ footer{ text-align:center; padding:28px; color:var(--muted); font-size:.8rem; bo
   .tier-label{ min-width:auto; padding:8px; font-size:1.1rem; }
   .grid-two{ grid-template-columns:1fr; }
 }
+
+/* ---------- UTILIDAD: alternar vistas (login / denegado / panel) ---------- */
+.hidden{ display:none !important; }
