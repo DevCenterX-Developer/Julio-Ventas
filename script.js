@@ -188,6 +188,9 @@ function getClaimCodeFromLocation(){
   const query = new URLSearchParams(window.location.search);
   const fromQuery = query.get('claim') || query.get('code') || '';
   if (fromQuery) return fromQuery;
+  const hashQuery = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const fromHash = hashQuery.get('claim') || hashQuery.get('code') || '';
+  if (fromHash) return fromHash;
   const pathParts = window.location.pathname.split('/').filter(Boolean);
   if (pathParts[0] === 'claim' && pathParts[1]) return pathParts[1];
   return '';
@@ -221,6 +224,15 @@ function getRank(keys = 0){
   return ranks.find(rank => keys >= rank.min) || ranks[ranks.length - 1];
 }
 
+function getDisplayRank(data = {}){
+  const savedRank = String(data?.rank || '').toUpperCase();
+  const rankByName = Object.fromEntries(ranks.map(rank => [rank.name, rank]));
+  if (savedRank && rankByName[savedRank]) {
+    return rankByName[savedRank];
+  }
+  return getRank(getKeyBalances(data).total);
+}
+
 function getKeyBalances(data = {}){
   const apkKeys = Number(data?.apkKeys ?? data?.keys ?? 0);
   const proxyKeys = Number(data?.proxyKeys ?? 0);
@@ -244,23 +256,19 @@ function toDate(value) {
 
 function getActiveKeys(data = {}, currency = 'apk') {
   const entries = Array.isArray(data?.activeKeys) ? data.activeKeys : [];
-  const now = Date.now();
   return entries.filter((entry) => {
     if (entry?.type && entry.type !== currency) return false;
-    const expiresAt = toDate(entry?.expiresAt);
-    return !expiresAt || expiresAt.getTime() > now;
+    return true;
   });
 }
 
 function getUsableActiveKeyEntries(data = {}, currency = 'apk') {
   const entries = Array.isArray(data?.activeKeys) ? data.activeKeys : [];
-  const now = Date.now();
   return entries
     .map((entry, index) => ({ ...entry, index }))
     .filter((entry) => {
       if (entry?.type && entry.type !== currency) return false;
-      const expiresAt = toDate(entry?.expiresAt);
-      return !expiresAt || expiresAt.getTime() > now;
+      return true;
     });
 }
 
@@ -385,12 +393,14 @@ function initAuthView(){
         const ref = doc(db, 'users', cred.user.uid);
         const snap = await getDoc(ref);
         if (!snap.exists()) {
-          await setDoc(ref, { email, apkKeys:0, proxyKeys:0, keys:0, isAdmin:false, createdAt: serverTimestamp() });
+          await setDoc(ref, { email, apkKeys:0, proxyKeys:0, keys:0, isAdmin:false, rank:'BRONCE', createdAt: serverTimestamp() });
+        } else if (!snap.data()?.rank) {
+          await updateDoc(ref, { rank: 'BRONCE' });
         }
       } else {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         await setDoc(doc(db, 'users', cred.user.uid), {
-          email, apkKeys:0, proxyKeys:0, keys:0, isAdmin:false, createdAt: serverTimestamp()
+          email, apkKeys:0, proxyKeys:0, keys:0, isAdmin:false, rank:'BRONCE', createdAt: serverTimestamp()
         });
       }
       authMsg.className = 'auth-msg ok';
@@ -825,16 +835,12 @@ function renderKeySummary(){
   $('totalKeyValue').textContent = balances.total;
   const dropdown = $('keySummaryDropdown');
   const activeItems = [];
-  const formatExpiry = (entry) => {
-    const expiresAt = toDate(entry?.expiresAt);
-    if (!expiresAt) return 'Sin fecha de expiración';
-    return `Expira ${expiresAt.toLocaleDateString('es-ES')}`;
-  };
+  const formatExpiry = () => 'Sin caducidad';
   if (activeApk.entries.length) {
-    activeItems.push(...activeApk.entries.map(entry => `<div class="summary-entry"><span class="summary-type apk">APK</span><span>${entry.amount || 1} keys · ${entry.durationDays ? `${entry.durationDays} D` : 'Sin tiempo'} · ${formatExpiry(entry)}</span></div>`));
+    activeItems.push(...activeApk.entries.map(entry => `<div class="summary-entry"><span class="summary-type apk">APK</span><span>${entry.amount || 1} keys · ${entry.durationDays ? `${entry.durationDays} D` : 'Sin tiempo'} · ${formatExpiry()}</span></div>`));
   }
   if (activeProxy.entries.length) {
-    activeItems.push(...activeProxy.entries.map(entry => `<div class="summary-entry"><span class="summary-type proxy">PROXY</span><span>${entry.amount || 1} keys · ${entry.durationDays ? `${entry.durationDays} D` : 'Sin tiempo'} · ${formatExpiry(entry)}</span></div>`));
+    activeItems.push(...activeProxy.entries.map(entry => `<div class="summary-entry"><span class="summary-type proxy">PROXY</span><span>${entry.amount || 1} keys · ${entry.durationDays ? `${entry.durationDays} D` : 'Sin tiempo'} · ${formatExpiry()}</span></div>`));
   }
   dropdown.innerHTML = activeItems.length
     ? activeItems.join('')
@@ -846,7 +852,7 @@ async function renderStore(){
   await refreshUserData();
   const balances = getKeyBalances(userData);
   renderKeySummary();
-  const currentRank = getRank(balances.total);
+  const currentRank = getDisplayRank(userData);
   $('userEmail').textContent = `${currentUser?.email ?? ''} · ${currentRank.name}`;
   renderKeys();
   await renderProducts();
@@ -1185,10 +1191,10 @@ function buildClaimView(code = ''){
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-logo">${iconBox('key',22)} Reclamar Keys</div>
-      <p class="auth-sub">Tu enlace de reclamo se añadirá automáticamente a tu cuenta de Julio Ventas.</p>
+      <p class="auth-sub">Tu enlace ya trae el premio listo. Inicia sesión o crea tu cuenta para recibirlo automáticamente.</p>
       <div class="field">
         <label>Código de reclamo</label>
-        <div class="input-group">${svg('key',18)}<input id="claimCodeInput" value="${escapeHtml(code)}" placeholder="Código del enlace"></div>
+        <div class="input-group">${svg('key',18)}<input id="claimCodeInput" value="${escapeHtml(code)}" placeholder="Código del enlace" readonly></div>
       </div>
       <div class="auth-tabs">
         <button type="button" id="claimTabLogin" class="active">Iniciar sesión</button>
@@ -1230,7 +1236,7 @@ async function claimLink(code, uid){
   const currentType = String(data.type || 'apk').toLowerCase();
   const field = currentType === 'proxy' ? 'proxyKeys' : 'apkKeys';
   const durationDays = parseDurationDays(data.duration);
-  const expiresAt = durationDays ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) : null;
+  const expiresAt = null;
 
   const result = await runTransaction(db, async (transaction) => {
     const claimSnapshot = await transaction.get(ref);
@@ -1288,8 +1294,8 @@ function initClaimView(){
     $('claimTabLogin').classList.toggle('active', mode === 'login');
     $('claimTabRegister').classList.toggle('active', mode === 'register');
     submitContent.innerHTML = (mode === 'login')
-      ? svg('check',18) + ' Iniciar sesión y reclamar'
-      : svg('plus',18) + ' Crear cuenta y reclamar';
+      ? svg('check',18) + ' Iniciar sesión y recibir premio'
+      : svg('plus',18) + ' Crear cuenta y recibir premio';
     msg.textContent = '';
     msg.className = 'auth-msg';
   };
@@ -1347,7 +1353,9 @@ function initClaimView(){
       const ref = doc(db, 'users', cred.user.uid);
       const snap = await getDoc(ref);
       if (!snap.exists()) {
-        await setDoc(ref, { email, apkKeys:0, proxyKeys:0, keys:0, isAdmin:false, createdAt: serverTimestamp() });
+        await setDoc(ref, { email, apkKeys:0, proxyKeys:0, keys:0, isAdmin:false, rank:'BRONCE', createdAt: serverTimestamp() });
+      } else if (!snap.data()?.rank) {
+        await updateDoc(ref, { rank: 'BRONCE' });
       }
       await runClaim(cred.user.uid);
     } catch (err) {

@@ -325,13 +325,14 @@ function initDeniedView(){
 function renderTable(list){
   const tbody = $('usersTbody');
   if (list.length === 0){
-    tbody.innerHTML = `<tr><td colspan="5" class="empty">Sin resultados</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty">Sin resultados</td></tr>`;
     return;
   }
   tbody.innerHTML = '';
   list.forEach(u => {
     const apkValue = u.apkKeys ?? u.keys ?? 0;
     const proxyValue = u.proxyKeys ?? 0;
+    const rankValue = String(u.rank || 'BRONCE').toUpperCase();
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${escapeHtml(u.email || '(sin correo)')}</td>
@@ -350,6 +351,18 @@ function renderTable(list){
           <button class="iconbtn gear-btn" data-edit-keys="${u.id}:proxy" type="button" title="Ajustar rápido Proxy">${svg('settings',14)}<span>Ajustar</span></button>
         </div>
       </td>
+      <td>
+        <select class="client-input" data-rank-select="${u.id}" data-current-rank="${rankValue}">
+          <option value="BRONCE" ${rankValue === 'BRONCE' ? 'selected' : ''}>Bronce</option>
+          <option value="PLATA" ${rankValue === 'PLATA' ? 'selected' : ''}>Plata</option>
+          <option value="ORO" ${rankValue === 'ORO' ? 'selected' : ''}>Oro</option>
+          <option value="DIAMANTE" ${rankValue === 'DIAMANTE' ? 'selected' : ''}>Diamante</option>
+          <option value="HEROICO" ${rankValue === 'HEROICO' ? 'selected' : ''}>Heroico</option>
+        </select>
+      </td>
+      <td>
+        <button class="btn" data-save-rank="${u.id}" type="button">Guardar rango</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
@@ -359,6 +372,18 @@ function renderStats(list){
   $('statUsers').textContent = list.length;
   $('statKeys').textContent = list.reduce((acc, u) => acc + ((u.apkKeys ?? u.keys ?? 0) + (u.proxyKeys ?? 0)), 0);
   $('statAdmins').textContent = list.filter(u => u.isAdmin).length;
+}
+
+async function saveUserRank(uid, rankValue){
+  const normalizedRank = String(rankValue || 'BRONCE').toUpperCase();
+  try {
+    await updateDoc(doc(db, 'users', uid), { rank: normalizedRank });
+    toast('Rango actualizado');
+    await loadUsers();
+  } catch (error) {
+    console.error('No se pudo guardar el rango:', error);
+    toast('No fue posible guardar el rango.', true);
+  }
 }
 
 async function loadUsers(){
@@ -571,7 +596,7 @@ function buildActiveKeyEntry(type, amount, durationValue){
     type: String(type).toLowerCase(),
     amount: Math.max(0, parseInt(amount, 10) || 0),
     durationDays,
-    expiresAt: durationDays ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) : null,
+    expiresAt: null,
     source: 'admin-adjustment'
   };
 }
@@ -830,6 +855,7 @@ function wirePanelEvents(){
     const deleteCodeId = e.target.closest('[data-delete-code]')?.getAttribute('data-delete-code');
     const editProductId = e.target.closest('[data-edit-product]')?.getAttribute('data-edit-product');
     const deleteProductId = e.target.closest('[data-delete-product]')?.getAttribute('data-delete-product');
+    const saveRankId = e.target.closest('[data-save-rank]')?.getAttribute('data-save-rank');
 
     if (editKeysTarget){
       const [uid, type] = editKeysTarget.split(':');
@@ -880,6 +906,13 @@ function wirePanelEvents(){
     }
     if (deleteProductId){
       await deleteProduct(deleteProductId);
+      return;
+    }
+    if (saveRankId) {
+      const selectEl = document.querySelector(`[data-rank-select="${saveRankId}"]`);
+      if (selectEl) {
+        await saveUserRank(saveRankId, selectEl.value);
+      }
       return;
     }
     if (editProductId){
