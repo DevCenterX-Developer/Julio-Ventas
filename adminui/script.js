@@ -528,10 +528,14 @@ function renderProductsPanel(){
     <div class="stack-item">
       <div style="display:flex; gap:12px; align-items:center;">
         <div style="width:64px; height:48px; overflow:hidden; border-radius:8px; background:rgba(0,0,0,.06); display:flex; align-items:center; justify-content:center;">
-          ${p.image ? `<img src="${escapeHtml(p.image)}" style="width:100%; height:100%; object-fit:cover;">` : svg(p.icon || 'box',28)}
+          ${p.image ? `<img src="${escapeHtml(p.image)}" style="width:100%; height:100%; object-fit:cover;">` : svg('box',28)}
         </div>
         <div>
-          <div class="stack-title">${escapeHtml(p.name)} · ${p.currency?.toUpperCase() || ''} · ${p.cost || 0}</div>
+          <div class="stack-title">
+            <span class="product-title-text">${escapeHtml(p.name)}</span>
+            <span class="product-meta-pill currency">${(p.currency || 'apk').toUpperCase()}</span>
+            <span class="product-meta-pill cost">${p.cost || 0}</span>
+          </div>
           <div class="stack-sub">Tier: ${escapeHtml(p.tier || '')} · ID: ${escapeHtml(p.id)}</div>
         </div>
       </div>
@@ -551,13 +555,12 @@ async function createProduct(){
   const cost = Number($('productCostInput').value || 0);
   const currency = String($('productCurrencySelect').value || 'apk');
   const tier = String($('productTierInput').value || '').trim();
-  const icon = String($('productIconInput').value || '').trim();
   if (!name) {
     $('productCreateMsg').className = 'auth-msg error';
     $('productCreateMsg').textContent = 'Nombre requerido.';
     return;
   }
-  const payload = { name, image, cost, currency, tier, icon, updatedAt: new Date() };
+  const payload = { name, image, cost, currency, tier, updatedAt: new Date() };
   if (editingId){
     await updateProduct(editingId, payload);
     btn.innerHTML = svg('plus',16) + ' Crear producto';
@@ -573,7 +576,6 @@ async function createProduct(){
   $('productImageInput').value = '';
   $('productCostInput').value = '1';
   $('productTierInput').value = '';
-  $('productIconInput').value = '';
   await loadProducts();
 }
 
@@ -586,70 +588,6 @@ async function deleteProduct(id){
   if (!confirm('Eliminar producto?')) return;
   await deleteDoc(doc(db, 'products', id));
   await loadProducts();
-}
-
-async function importProductsFromJson(){
-  const input = $('productJsonInput');
-  const msg = $('productImportMsg');
-  if (!input || !msg) return;
-  const raw = String(input.value || '').trim();
-  if (!raw) {
-    msg.className = 'auth-msg error';
-    msg.textContent = 'Pega un JSON antes de importar.';
-    return;
-  }
-
-  try {
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (firstError) {
-      parsed = Function(`"use strict"; return (${raw});`)();
-    }
-
-    const sourceList = Array.isArray(parsed) ? parsed : (parsed && typeof parsed === 'object' && Array.isArray(parsed.products) ? parsed.products : [parsed]);
-    const list = sourceList.filter(item => item && typeof item === 'object');
-    if (!list.length) {
-      msg.className = 'auth-msg error';
-      msg.textContent = 'El JSON no contiene productos.';
-      return;
-    }
-
-    const validProducts = list.filter(item => item && typeof item === 'object' && item.name);
-    if (!validProducts.length) {
-      msg.className = 'auth-msg error';
-      msg.textContent = 'No se encontraron productos válidos.';
-      return;
-    }
-
-    msg.className = 'auth-msg';
-    msg.innerHTML = '<span class="spinner"></span> Importando productos...';
-
-    const batch = [];
-    validProducts.forEach((item) => {
-      const payload = {
-        name: String(item.name || '').trim(),
-        image: String(item.image || '').trim(),
-        cost: Number(item.cost || 0),
-        currency: String(item.currency || 'apk').toLowerCase(),
-        tier: String(item.tier || '').trim(),
-        icon: String(item.icon || '').trim(),
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
-      batch.push(addDoc(collection(db, 'products'), payload));
-    });
-
-    await Promise.all(batch);
-    input.value = '';
-    msg.className = 'auth-msg ok';
-    msg.textContent = `${validProducts.length} producto(s) importado(s) correctamente.`;
-    await loadProducts();
-  } catch (error) {
-    console.error('No se pudieron importar los productos:', error);
-    msg.className = 'auth-msg error';
-    msg.textContent = 'El JSON no es válido o falló la importación.';
-  }
 }
 
 // ---------------------------------------------------------------------
@@ -713,7 +651,6 @@ function wirePanelEvents(){
   $('createCodeBtn').addEventListener('click', createPromoCode);
   $('createProductBtn').addEventListener('click', createProduct);
   $('saveProductDurationsBtn').addEventListener('click', saveDurationConfig);
-  $('importProductsBtn').addEventListener('click', importProductsFromJson);
   $('claimTypeSelect').addEventListener('change', () => populateDurationSelects());
   $('codeTypeSelect').addEventListener('change', () => populateDurationSelects());
   $('codeAmountInput').addEventListener('input', () => renderCodeValueFields(Number($('codeAmountInput').value) || 1));
@@ -814,12 +751,13 @@ function wirePanelEvents(){
         $('productCostInput').value = p.cost || 1;
         $('productCurrencySelect').value = p.currency || 'apk';
         $('productTierInput').value = p.tier || '';
-        $('productIconInput').value = p.icon || '';
         const btn = $('createProductBtn');
-        btn.textContent = 'Guardar cambios';
+        btn.innerHTML = svg('save',16) + ' Guardar cambios';
         btn.dataset.editing = editProductId;
         $('productCreateMsg').className = 'auth-msg';
         $('productCreateMsg').textContent = 'Editando producto...';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        $('productNameInput').focus();
       }
       return;
     }
