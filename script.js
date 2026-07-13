@@ -65,7 +65,7 @@ function iconBox(name, size = 18){ return '<span class="icon-box">' + svg(name, 
 // ---------------------------------------------------------------------
 let durationConfig = {
   apk: ['1D', '3D', '15D', '1MES'],
-  proxy: ['3D', '7D', '31D']
+  proxy: ['1D', '3D', '7D', '31D']
 };
 
 const durationConfigRef = doc(db, 'settings', 'keyDurations');
@@ -76,7 +76,7 @@ const keyOfferSections = [
     title:'APK',
     subtitle:'HG APK / DRIP',
     durationOptions: [
-      { days:1, price:2 },
+      { days:1, price:3 },
       { days:3, price:3.5 },
       { days:15, price:8 },
       { days:30, price:12 }
@@ -87,6 +87,7 @@ const keyOfferSections = [
     title:'PROXY',
     subtitle:'HG PROXY / DRIP PROXY',
     durationOptions: [
+      { days:1, price:3 },
       { days:3, price:3.5 },
       { days:7, price:5 },
       { days:31, price:9 }
@@ -567,7 +568,7 @@ function buildDurationOptions(sectionId = 'apk'){
     ? durationConfig[sectionId]
     : [];
   const defaults = sectionId === 'proxy'
-    ? [3, 7, 31]
+    ? [1, 3, 7, 31]
     : [1, 3, 15, 30];
   const values = configuredValues.length ? configuredValues : defaults;
   const section = keyOfferSections.find(item => item.id === sectionId) || keyOfferSections[0];
@@ -589,13 +590,13 @@ async function loadDurationConfig(){
     const proxyValues = normalizeDurationValues(data?.proxyDurations ?? data?.proxy ?? '');
     durationConfig = {
       apk: apkValues.length ? apkValues : ['1D', '3D', '15D', '1MES'],
-      proxy: proxyValues.length ? proxyValues : ['3D', '7D', '31D']
+      proxy: proxyValues.length ? proxyValues : ['1D', '3D', '7D', '31D']
     };
   } catch (error) {
     console.error('No se pudo cargar la configuración de duraciones:', error);
     durationConfig = {
       apk: ['1D', '3D', '15D', '1MES'],
-      proxy: ['3D', '7D', '31D']
+      proxy: ['1D', '3D', '7D', '31D']
     };
   }
 }
@@ -758,7 +759,8 @@ async function renderTierlist(){
           email: data.email || 'Usuario',
           apkKeys: balances.apkKeys,
           proxyKeys: balances.proxyKeys,
-          totalKeys: balances.total
+          totalKeys: balances.total,
+          customRank: getDisplayRank(data)
         };
       })
       .sort((a, b) => b.totalKeys - a.totalKeys || a.email.localeCompare(b.email));
@@ -777,7 +779,7 @@ async function renderTierlist(){
           <span class="position">#${index + 1}</span>
           <div class="player-info">
             <span class="player-email">${escapeHtml(player.email)}</span>
-            <span class="rank-tag ${rank.className}">${rank.name}</span>
+            <span class="rank-tag ${player.customRank.className}">${player.customRank.name}</span>
           </div>
           <div class="player-details">
             <span class="currency-pill">${svg('key',14)} ${player.apkKeys} APK</span>

@@ -157,7 +157,7 @@ let promoCodes = [];
 let productsList = [];
 let durationConfig = {
   apk: ['1D', '3D', '15D', '1MES'],
-  proxy: ['3D', '7D', '31D']
+  proxy: ['1D', '3D', '7D', '31D']
 };
 
 const durationConfigRef = doc(db, 'settings', 'keyDurations');
@@ -170,6 +170,7 @@ const claimDurationOptions = [
 ];
 
 const proxyDurationOptions = [
+  { value: '1D', label: '1 D' },
   { value: '3D', label: '3 D' },
   { value: '7D', label: '7 D' },
   { value: '31D', label: '31 D' }
