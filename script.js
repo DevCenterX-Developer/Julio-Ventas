@@ -63,6 +63,13 @@ function iconBox(name, size = 18){ return '<span class="icon-box">' + svg(name, 
 // ---------------------------------------------------------------------
 // CATÁLOGO
 // ---------------------------------------------------------------------
+let durationConfig = {
+  apk: ['1D', '3D', '15D', '1MES'],
+  proxy: ['3D', '7D', '31D']
+};
+
+const durationConfigRef = doc(db, 'settings', 'keyDurations');
+
 const keyOfferSections = [
   {
     id:'apk',
@@ -463,6 +470,61 @@ function buildStoreView(){
   `;
 }
 
+function normalizeDurationValues(raw = ''){
+  if (Array.isArray(raw)) {
+    return raw.map(item => String(item || '').trim().toUpperCase()).filter(Boolean);
+  }
+  return String(raw || '')
+    .split(',')
+    .map(item => item.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function getDurationDaysFromValue(value = ''){
+  const normalized = String(value || '').toUpperCase();
+  if (normalized === '1MES') return 30;
+  const match = normalized.match(/(\d+)/);
+  return match ? Number(match[1]) : 0;
+}
+
+function buildDurationOptions(sectionId = 'apk'){
+  const configuredValues = Array.isArray(durationConfig?.[sectionId]) && durationConfig[sectionId].length
+    ? durationConfig[sectionId]
+    : [];
+  const defaults = sectionId === 'proxy'
+    ? [3, 7, 31]
+    : [1, 3, 15, 30];
+  const values = configuredValues.length ? configuredValues : defaults;
+  const section = keyOfferSections.find(item => item.id === sectionId) || keyOfferSections[0];
+  return values.map((value) => {
+    const days = getDurationDaysFromValue(value);
+    const matchingOption = section.durationOptions.find(option => option.days === days);
+    return {
+      days,
+      price: matchingOption ? matchingOption.price : (days === 30 || days === 31 ? 12 : 3.5)
+    };
+  }).filter(option => option.days > 0);
+}
+
+async function loadDurationConfig(){
+  try {
+    const snap = await getDoc(durationConfigRef);
+    const data = snap.exists() ? snap.data() : {};
+    const apkValues = normalizeDurationValues(data?.apkDurations ?? data?.apk ?? '');
+    const proxyValues = normalizeDurationValues(data?.proxyDurations ?? data?.proxy ?? '');
+    durationConfig = {
+      apk: apkValues.length ? apkValues : ['1D', '3D', '15D', '1MES'],
+      proxy: proxyValues.length ? proxyValues : ['3D', '7D', '31D']
+    };
+  } catch (error) {
+    console.error('No se pudo cargar la configuración de duraciones:', error);
+    durationConfig = {
+      apk: ['1D', '3D', '15D', '1MES'],
+      proxy: ['3D', '7D', '31D']
+    };
+  }
+}
+
 function getKeyDurationLabel(days){
   if (days === 30) return '1 MES';
   if (days === 31) return '1 MES';
@@ -518,6 +580,8 @@ function validatePurchaseModal(){
 
 function openPurchaseModal(sectionId, amount){
   const section = keyOfferSections.find(item => item.id === sectionId) || keyOfferSections[0];
+  const dynamicOptions = buildDurationOptions(sectionId);
+  section.durationOptions = dynamicOptions;
   purchaseSelection.sectionId = sectionId;
   purchaseSelection.amount = amount;
   if (!purchaseSelection.durationDays || !section.durationOptions.some(opt => opt.days === purchaseSelection.durationDays)) {
@@ -713,6 +777,7 @@ function renderKeySummary(){
 }
 
 async function renderStore(){
+  await loadDurationConfig();
   await refreshUserData();
   const balances = getKeyBalances(userData);
   renderKeySummary();

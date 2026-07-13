@@ -77,6 +77,12 @@ let allUsers = [];
 let claimLinks = [];
 let promoCodes = [];
 let productsList = [];
+let durationConfig = {
+  apk: ['1D', '3D', '15D', '1MES'],
+  proxy: ['3D', '7D', '31D']
+};
+
+const durationConfigRef = doc(db, 'settings', 'keyDurations');
 
 const claimDurationOptions = [
   { value: '1D', label: '1 D' },
@@ -93,9 +99,84 @@ const proxyDurationOptions = [
 
 const clientOptions = ['CUBAN', 'HG', 'DRIP'];
 
+function getDurationLabel(value = ''){
+  const normalized = String(value || '').toUpperCase();
+  if (normalized === '1MES') return '1 MES';
+  const match = normalized.match(/(\d+)/);
+  return match ? `${match[1]} D` : normalized;
+}
+
+function normalizeDurationValues(raw = ''){
+  if (Array.isArray(raw)) {
+    return raw.map(item => String(item || '').trim().toUpperCase()).filter(Boolean);
+  }
+  return String(raw || '')
+    .split(',')
+    .map(item => item.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function getConfiguredDurationOptions(type = 'apk'){
+  const configuredValues = Array.isArray(durationConfig?.[type]) && durationConfig[type].length
+    ? durationConfig[type]
+    : [];
+  const values = configuredValues.length
+    ? configuredValues
+    : (type === 'proxy' ? proxyDurationOptions : claimDurationOptions).map(option => option.value);
+  return values.map(value => ({ value: String(value).toUpperCase(), label: getDurationLabel(value) }));
+}
+
+function applyDurationInputsToForm(){
+  if ($('productApkDurationsInput')) {
+    $('productApkDurationsInput').value = (durationConfig.apk || []).join(',');
+  }
+  if ($('productProxyDurationsInput')) {
+    $('productProxyDurationsInput').value = (durationConfig.proxy || []).join(',');
+  }
+}
+
+async function loadDurationConfig(){
+  try {
+    const snap = await getDoc(durationConfigRef);
+    const data = snap.exists() ? snap.data() : {};
+    const apkValues = normalizeDurationValues(data?.apkDurations ?? data?.apk ?? '');
+    const proxyValues = normalizeDurationValues(data?.proxyDurations ?? data?.proxy ?? '');
+    durationConfig = {
+      apk: apkValues.length ? apkValues : [...claimDurationOptions.map(option => option.value)],
+      proxy: proxyValues.length ? proxyValues : [...proxyDurationOptions.map(option => option.value)]
+    };
+  } catch (error) {
+    console.error('No se pudo cargar la configuración de duraciones:', error);
+    durationConfig = {
+      apk: [...claimDurationOptions.map(option => option.value)],
+      proxy: [...proxyDurationOptions.map(option => option.value)]
+    };
+  }
+  applyDurationInputsToForm();
+  populateDurationSelects();
+}
+
+async function saveDurationConfig(){
+  const apkValues = normalizeDurationValues($('productApkDurationsInput')?.value || '');
+  const proxyValues = normalizeDurationValues($('productProxyDurationsInput')?.value || '');
+  const payload = {
+    apkDurations: apkValues,
+    proxyDurations: proxyValues,
+    updatedAt: new Date()
+  };
+  await setDoc(durationConfigRef, payload, { merge: true });
+  durationConfig = {
+    apk: apkValues.length ? apkValues : [...claimDurationOptions.map(option => option.value)],
+    proxy: proxyValues.length ? proxyValues : [...proxyDurationOptions.map(option => option.value)]
+  };
+  applyDurationInputsToForm();
+  populateDurationSelects();
+  toast('Duraciones guardadas correctamente');
+}
+
 function formatDurationForType(type, value){
-  if (type === 'proxy') return proxyDurationOptions.find(opt => opt.value === value)?.label || value;
-  return claimDurationOptions.find(opt => opt.value === value)?.label || value;
+  const options = getConfiguredDurationOptions(type);
+  return options.find(opt => opt.value === String(value || '').toUpperCase())?.label || value;
 }
 
 function toast(msg, isError=false){
@@ -214,12 +295,16 @@ function populateDurationSelects(){
   const claimDurationSelect = $('claimDurationSelect');
   const codeDurationSelect = $('codeDurationSelect');
   const applyDurationOptions = (select, type) => {
-    const options = type === 'proxy' ? proxyDurationOptions : claimDurationOptions;
-    select.innerHTML = options.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('');
+    if (!select) return;
+    const options = getConfiguredDurationOptions(type);
+    select.innerHTML = options.map(opt => `<option value="${opt.value}">${escapeHtml(opt.label)}</option>`).join('');
   };
   applyDurationOptions(claimDurationSelect, $('claimTypeSelect').value);
   applyDurationOptions(codeDurationSelect, $('codeTypeSelect').value);
-  $('codeClientSelect').innerHTML = clientOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+  const codeClientSelect = $('codeClientSelect');
+  if (codeClientSelect) {
+    codeClientSelect.innerHTML = clientOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -571,7 +656,7 @@ async function importProductsFromJson(){
 // MODAL: EDITAR KEYS
 // ---------------------------------------------------------------------
 function fillEditKeyDurationOptions(type, activeEntries = []){
-  const options = type === 'proxy' ? proxyDurationOptions : claimDurationOptions;
+  const options = getConfiguredDurationOptions(type);
   const container = $('editKeyDurationFields');
   if (!container) return;
   const normalizedType = String(type || '').toLowerCase();
@@ -627,6 +712,7 @@ function wirePanelEvents(){
   $('createClaimBtn').addEventListener('click', createClaimLink);
   $('createCodeBtn').addEventListener('click', createPromoCode);
   $('createProductBtn').addEventListener('click', createProduct);
+  $('saveProductDurationsBtn').addEventListener('click', saveDurationConfig);
   $('importProductsBtn').addEventListener('click', importProductsFromJson);
   $('claimTypeSelect').addEventListener('change', () => populateDurationSelects());
   $('codeTypeSelect').addEventListener('change', () => populateDurationSelects());
@@ -778,6 +864,7 @@ onAuthStateChanged(auth, async (user) => {
 
   $('adminEmail').textContent = user.email;
   showView('panelView');
+  await loadDurationConfig();
   populateDurationSelects();
   renderCodeValueFields(Number($('codeAmountInput').value) || 1);
   if (window.innerWidth < 900) $('adminNav').classList.add('hidden');
