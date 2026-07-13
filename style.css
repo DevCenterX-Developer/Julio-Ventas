@@ -479,6 +479,7 @@ button, .btn{ font-family:inherit; }
 .complete-btn:disabled:hover{ transform:none; }
 .complete-btn.hidden{ display:none; }
 .redeem-hint{ padding:12px 14px; border-radius:14px; background:rgba(79,124,255,.12); border:1px solid rgba(79,124,255,.16); color:var(--text); font-size:.86rem; line-height:1.5; }
+.code-reveal-box{ padding:12px 14px; border-radius:14px; background:rgba(79,124,255,.16); border:1px solid rgba(79,124,255,.24); color:var(--accent); font-weight:800; letter-spacing:.5px; word-break:break-all; }
 
 .modal{
   position:fixed;

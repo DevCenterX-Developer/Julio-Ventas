@@ -31,6 +31,59 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 const $ = (id) => document.getElementById(id);
+const PROMO_CODE_SECRET = 'julio-ventas-promo-codes-v1';
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+async function derivePromoCodeKey() {
+  const encoder = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(PROMO_CODE_SECRET),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: encoder.encode('julio-ventas-salt'),
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptText(text = '') {
+  const key = await derivePromoCodeKey();
+  const encoder = new TextEncoder();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(text));
+  return {
+    ciphertext: arrayBufferToBase64(encrypted),
+    iv: arrayBufferToBase64(iv.buffer)
+  };
+}
 
 // ---------------------------------------------------------------------
 // ICONOS SVG (solo se usan para construir filas/listas dinámicas;
@@ -104,6 +157,13 @@ function getDurationLabel(value = ''){
   if (normalized === '1MES') return '1 MES';
   const match = normalized.match(/(\d+)/);
   return match ? `${match[1]} D` : normalized;
+}
+
+function parseDurationDays(value = ''){
+  const normalized = String(value || '').toUpperCase();
+  if (normalized === '1MES') return 30;
+  const match = normalized.match(/(\d+)/);
+  return match ? Number(match[1]) : 0;
 }
 
 function normalizeDurationValues(raw = ''){
@@ -362,15 +422,15 @@ function renderCodes(){
     return;
   }
   list.innerHTML = promoCodes.map(code => {
-    const codeValues = Array.isArray(code.codes) ? code.codes.join(', ') : code.value || '';
-    const label = Array.isArray(code.codes) && code.codes.length > 1
-      ? `${code.codes.length} códigos · ${codeValues}`
-      : codeValues;
+    const codeCount = Array.isArray(code.codes) ? code.codes.length : 0;
+    const label = codeCount
+      ? `${codeCount} códigos cifrados · ${code.amount} keys`
+      : 'Sin códigos';
     return `
     <div class="stack-item">
       <div>
         <div class="stack-title">${code.client} · ${code.type.toUpperCase()} · ${formatDurationForType(code.type, code.duration)}</div>
-        <div class="stack-sub">${escapeHtml(label)} · ${code.amount} keys</div>
+        <div class="stack-sub">${escapeHtml(label)} · ${code.redeemedCount || 0} usados</div>
       </div>
       <div class="stack-actions">
         <button data-delete-code="${code.id}">Eliminar</button>
@@ -394,14 +454,31 @@ async function createPromoCode(){
   const duration = $('codeDurationSelect').value;
   const amount = Math.max(1, parseInt($('codeAmountInput').value, 10) || 1);
   const codeInputs = Array.from(document.querySelectorAll('.code-value-input'));
-  const codes = codeInputs.map(input => input.value.trim()).filter(Boolean);
-  if (!codes.length) {
+  const rawCodes = codeInputs.map(input => input.value.trim()).filter(Boolean);
+  if (!rawCodes.length) {
     $('codeCreateMsg').className = 'auth-msg error';
     $('codeCreateMsg').innerHTML = svg('alert',16) + ' Ingresa al menos un código.';
     return;
   }
+
+  const encryptedCodes = [];
+  for (const rawCode of rawCodes) {
+    const payload = await encryptText(rawCode);
+    encryptedCodes.push(payload);
+  }
+
   const ref = doc(collection(db, 'promoCodes'));
-  await setDoc(ref, { client, type, duration, amount, codes, active: true, createdAt: new Date() });
+  await setDoc(ref, {
+    client,
+    type,
+    duration,
+    durationDays: parseDurationDays(duration),
+    amount,
+    codes: encryptedCodes,
+    active: true,
+    redeemedCount: 0,
+    createdAt: new Date()
+  });
   $('codeCreateMsg').className = 'auth-msg ok';
   $('codeCreateMsg').innerHTML = svg('check',16) + ' Código(s) guardado(s) correctamente.';
   await loadCodes();

@@ -42,7 +42,8 @@ service cloud.firestore {
 
     match /promoCodes/{codeId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['codes', 'redeemedCount', 'updatedAt']));
     }
 
     match /products/{productId} {

@@ -119,6 +119,70 @@ const products = [
 ];
 
 const CLAIM_BASE_URL = 'https://juliojl.vercel.app';
+const PROMO_CODE_SECRET = 'julio-ventas-promo-codes-v1';
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+function base64ToArrayBuffer(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+async function derivePromoCodeKey() {
+  const encoder = new TextEncoder();
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(PROMO_CODE_SECRET),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: encoder.encode('julio-ventas-salt'),
+      iterations: 100000,
+      hash: 'SHA-256'
+    },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptText(text = '') {
+  const key = await derivePromoCodeKey();
+  const encoder = new TextEncoder();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(text));
+  return {
+    ciphertext: arrayBufferToBase64(encrypted),
+    iv: arrayBufferToBase64(iv.buffer)
+  };
+}
+
+async function decryptText(payload = {}) {
+  if (!payload?.ciphertext || !payload?.iv) return '';
+  const key = await derivePromoCodeKey();
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToArrayBuffer(payload.iv) },
+    key,
+    base64ToArrayBuffer(payload.ciphertext)
+  );
+  return new TextDecoder().decode(decrypted);
+}
 
 function getClaimCodeFromLocation(){
   const query = new URLSearchParams(window.location.search);
@@ -231,7 +295,8 @@ let purchaseSelection = {
 };
 let redemptionSelection = {
   productId: null,
-  activeKeyIndex: null
+  activeKeyIndex: null,
+  revealedCode: ''
 };
 
 const $ = (id) => document.getElementById(id);
@@ -817,36 +882,149 @@ function buyKeyPackage(){
   toast('Se abrió WhatsApp para completar tu pedido.');
 }
 
-async function findMatchingPromoCode(product){
+async function findMatchingPromoCode(product, activeEntry = null){
   const snap = await getDocs(collection(db, 'promoCodes'));
-  return snap.docs
+  const expectedType = String(product?.currency || 'apk').toLowerCase() === 'proxy' ? 'proxy' : 'apk';
+  const candidates = snap.docs
     .map((d) => ({ id: d.id, ...d.data() }))
-    .find((code) => code.active !== false && (
+    .filter((code) => code.active !== false && Array.isArray(code.codes) && code.codes.length > 0 && (
       code.productId === product.id ||
       code.productName === product.name ||
-      code.type === product.currency
-    )) || null;
+      code.type === product.currency ||
+      String(code.type || '').toLowerCase() === expectedType
+    ));
+
+  if (!candidates.length) return null;
+  if (!activeEntry) {
+    return candidates.find((code) => String(code.type || '').toLowerCase() === expectedType) || null;
+  }
+
+  const requestedDuration = Number(activeEntry.durationDays || 0);
+  return candidates.find((code) => {
+    const codeType = String(code.type || '').toLowerCase();
+    if (codeType !== expectedType) return false;
+    const codeDuration = Number(code.durationDays ?? parseDurationDays(code.duration));
+    return !requestedDuration || !codeDuration || codeDuration === requestedDuration;
+  }) || null;
 }
 
-async function buyProduct(id){
+async function buyProduct(id, activeKeyIndex = null){
   const p = products.find(x => x.id === id);
   if (!p) return;
   await refreshUserData();
-  const matchingCode = await findMatchingPromoCode(p);
+  const activeEntries = getUsableActiveKeyEntries(userData, p.currency === 'proxy' ? 'proxy' : 'apk');
+  if (!activeEntries.length) {
+    toast('No tienes keys activas para este tipo.', true);
+    return;
+  }
+
+  const selectedEntry = activeKeyIndex != null
+    ? activeEntries.find((entry) => entry.index === Number(activeKeyIndex)) || activeEntries[0]
+    : activeEntries[0];
+  const matchingCode = await findMatchingPromoCode(p, selectedEntry);
 
   if (!matchingCode) {
-    toast('Este producto no está disponible en este momento.', true);
-    await renderProducts();
+    toast('No hay un código disponible para esta key y duración.', true);
+    return;
+  }
+
+  const encryptedCodes = Array.isArray(matchingCode.codes) ? matchingCode.codes : [];
+  if (!encryptedCodes.length) {
+    toast('Ya no quedan códigos disponibles para este grupo.', true);
+    return;
+  }
+
+  const [selectedCodePayload, ...restCodes] = encryptedCodes;
+  const plaintextCode = await decryptText(selectedCodePayload);
+  if (!plaintextCode) {
+    toast('No fue posible leer el código. Intenta de nuevo.', true);
     return;
   }
 
   const date = new Date().toLocaleString();
-  const keyCode = generateKeyCode(p.currency === 'proxy' ? 'PROXY' : 'APK');
-  await addDoc(collection(db, 'users', currentUser.uid, 'inventory'), { name: p.name, icon: p.icon, image: p.image, currency: p.currency, code: keyCode, type:'product', date, createdAt: serverTimestamp() });
-  await addDoc(collection(db, 'users', currentUser.uid, 'history'), { type:'product', desc:`Canjeado: ${p.name}`, value: p.cost, currency: p.currency, icon: p.icon, date, createdAt: serverTimestamp() });
-  showCelebration('¡Clave generada!', `Tu canje quedó guardado y la clave es: ${keyCode}`, keyCode);
-  toast(`Canjeaste: ${p.name} con código activo`);
+  const inventoryRef = doc(collection(db, 'users', currentUser.uid, 'inventory'));
+  await setDoc(inventoryRef, {
+    name: p.name,
+    icon: p.icon,
+    image: p.image,
+    currency: p.currency,
+    code: plaintextCode,
+    type: 'product',
+    date,
+    source: 'promo-code',
+    keyType: selectedEntry.type,
+    durationDays: selectedEntry.durationDays || null,
+    createdAt: serverTimestamp()
+  });
+  await addDoc(collection(db, 'users', currentUser.uid, 'history'), {
+    type: 'product',
+    desc: `Canjeado: ${p.name}`,
+    value: p.cost,
+    currency: p.currency,
+    icon: p.icon,
+    date,
+    createdAt: serverTimestamp()
+  });
+  await updateDoc(doc(db, 'promoCodes', matchingCode.id), {
+    codes: restCodes,
+    redeemedCount: increment(1),
+    updatedAt: serverTimestamp()
+  });
+
+  redemptionSelection.revealedCode = plaintextCode;
+  renderRedeemSuccessState(p, plaintextCode);
+  toast(`Canjeaste: ${p.name} y tu código fue revelado.`);
   await renderStore();
+}
+
+function renderRedeemSelectionState(product, activeEntries){
+  const modal = $('redeemModal');
+  if (!modal) return;
+  const select = document.createElement('select');
+  select.id = 'redeemKeySelect';
+  select.className = 'client-input';
+  select.innerHTML = activeEntries.length
+    ? activeEntries.map((entry) => {
+        const durationLabel = entry.durationDays ? getKeyDurationLabel(entry.durationDays) : 'Sin tiempo';
+        return `<option value="${entry.index}">${(entry.amount || 1)} key${(entry.amount || 1) > 1 ? 's' : ''} · ${entry.type?.toUpperCase() || 'APK'} · ${durationLabel}</option>`;
+      }).join('')
+    : '<option value="">No tienes keys activas disponibles</option>';
+  const body = modal.querySelector('.modal-body');
+  body.innerHTML = `
+    <div class="modal-row">
+      <div class="modal-label">Producto</div>
+      <div id="redeemProductName" class="modal-value">${escapeHtml(product.name)}</div>
+    </div>
+    <div class="detail-field">
+      <label for="redeemKeySelect">Selecciona una key activa</label>
+      ${select.outerHTML}
+    </div>
+    <div id="redeemHint" class="redeem-hint">${activeEntries.length ? 'Selecciona una key activa para validar el canje con los datos guardados en la base.' : 'No hay keys activas disponibles para este tipo. El canje se bloqueará hasta que tengas una.'}</div>
+  `;
+  $('redeemModalSubtitle').textContent = `${product.name} · ${product.currency === 'proxy' ? 'Proxy' : 'APK'}`;
+  $('redeemSubmitBtn').innerHTML = `${svg('check',16)} Canjear ahora`;
+  $('redeemSubmitBtn').disabled = false;
+}
+
+function renderRedeemSuccessState(product, code){
+  const modal = $('redeemModal');
+  if (!modal) return;
+  const body = modal.querySelector('.modal-body');
+  body.innerHTML = `
+    <div class="modal-row">
+      <div class="modal-label">Producto</div>
+      <div id="redeemProductName" class="modal-value">${escapeHtml(product.name)}</div>
+    </div>
+    <div class="detail-field">
+      <label>Código revelado</label>
+      <div class="code-reveal-box">${escapeHtml(code)}</div>
+    </div>
+    <button id="copyRevealedCodeBtn" class="btn" type="button">${svg('key',16)} Copiar código</button>
+    <div class="redeem-hint">Este código ya quedó guardado en tu inventario y puedes copiarlo desde aquí.</div>
+  `;
+  $('redeemModalSubtitle').textContent = `${product.name} · ${product.currency === 'proxy' ? 'Proxy' : 'APK'}`;
+  $('redeemSubmitBtn').innerHTML = `${svg('check',16)} Cerrar`;
+  $('redeemSubmitBtn').disabled = false;
 }
 
 function openRedeemModal(productId){
@@ -857,18 +1035,8 @@ function openRedeemModal(productId){
   if (!modal) return;
   redemptionSelection.productId = productId;
   redemptionSelection.activeKeyIndex = null;
-  $('redeemModalSubtitle').textContent = `${product.name} · ${product.currency === 'proxy' ? 'Proxy' : 'APK'}`;
-  $('redeemProductName').textContent = product.name;
-  const select = $('redeemKeySelect');
-  select.innerHTML = activeEntries.length
-    ? activeEntries.map((entry) => {
-        const durationLabel = entry.durationDays ? getKeyDurationLabel(entry.durationDays) : 'Sin tiempo';
-        return `<option value="${entry.index}">${(entry.amount || 1)} key${(entry.amount || 1) > 1 ? 's' : ''} · ${entry.type?.toUpperCase() || 'APK'} · ${durationLabel}</option>`;
-      }).join('')
-    : '<option value="">No tienes keys activas disponibles</option>';
-  $('redeemHint').textContent = activeEntries.length
-    ? 'Selecciona una key activa para validar el canje con los datos guardados en la base.'
-    : 'No hay keys activas disponibles para este tipo. El canje se bloqueará hasta que tengas una.';
+  redemptionSelection.revealedCode = '';
+  renderRedeemSelectionState(product, activeEntries);
   modal.classList.remove('hidden');
 }
 
@@ -878,6 +1046,7 @@ function closeRedeemModal(){
   modal.classList.add('hidden');
   redemptionSelection.productId = null;
   redemptionSelection.activeKeyIndex = null;
+  redemptionSelection.revealedCode = '';
 }
 
 function initStoreView(){
@@ -910,6 +1079,7 @@ function initStoreView(){
     const redeemSubmit = e.target.closest('#redeemSubmitBtn');
     const redeemModalClose = e.target.closest('#redeemModal .modal-close');
     const redeemModalBackdrop = e.target.closest('#redeemModal .modal-backdrop');
+    const copyRevealedCodeBtn = e.target.closest('#copyRevealedCodeBtn');
 
     if (keyCard) {
       const [sectionId, amount] = keyCard.getAttribute('data-keycard').split(':');
@@ -943,11 +1113,24 @@ function initStoreView(){
       return;
     }
 
-    if (redeemSubmit) {
-      if (redemptionSelection.productId) {
-        buyProduct(redemptionSelection.productId, redemptionSelection.activeKeyIndex);
+    if (copyRevealedCodeBtn) {
+      if (redemptionSelection.revealedCode) {
+        navigator.clipboard.writeText(redemptionSelection.revealedCode);
+        toast('Código copiado al portapapeles.');
       }
-      closeRedeemModal();
+      return;
+    }
+
+    if (redeemSubmit) {
+      if (redemptionSelection.revealedCode) {
+        closeRedeemModal();
+        return;
+      }
+      if (redemptionSelection.productId) {
+        void (async () => {
+          await buyProduct(redemptionSelection.productId, redemptionSelection.activeKeyIndex);
+        })();
+      }
       return;
     }
 
@@ -963,11 +1146,11 @@ function initStoreView(){
         if (!p) return;
         const matchingCode = await findMatchingPromoCode(p);
         if (!matchingCode) {
-          toast('Este producto no está disponible en este momento.', true);
+          toast('Este producto no está disponible para tu key activa.', true);
           await renderProducts();
           return;
         }
-        await buyProduct(buyProdId);
+        openRedeemModal(buyProdId);
       })();
     }
   });
