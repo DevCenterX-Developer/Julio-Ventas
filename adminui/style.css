@@ -480,6 +480,9 @@ footer{ text-align:center; padding:28px; color:var(--muted); font-size:.8rem; bo
 .admin-batch-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:10px; }
 .admin-balance-field{ display:flex; flex-direction:column; gap:10px; }
 .admin-balance-field input[type="number"]{ max-width:140px; }
+.admin-actions-stack{ display:flex; flex-direction:column; gap:10px; }
+.admin-rank-select{ width:100%; min-width:140px; }
+.admin-rank-btn{ width:100%; min-height:42px; }
 .admin-entries-stack{ display:flex; flex-wrap:wrap; gap:6px; }
 .admin-entry-pill{ display:inline-flex; align-items:center; gap:6px; padding:6px 8px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); font-size:.75rem; color:var(--text); }
 .admin-nav{ width:100%; justify-content:flex-start; }
@@ -576,6 +579,17 @@ footer{ text-align:center; padding:28px; color:var(--muted); font-size:.8rem; bo
 .modal-duration-grid{ display:grid; gap:10px; width:100%; }
 .modal-divider{ height:1px; background:rgba(255,255,255,.08); margin:4px 0 0; }
 .empty-card{ padding:12px; text-align:center; color:var(--muted); border:1px dashed var(--border-soft); border-radius:12px; }
+@media (max-width:700px){
+  .admin-table, .admin-table thead, .admin-table tbody, .admin-table tr, .admin-table td{ display:block; width:100%; }
+  .admin-table thead{ display:none; }
+  .admin-table tr{ margin-bottom:14px; border:1px solid var(--glass-brd); border-radius:14px; overflow:hidden; background:var(--glass); }
+  .admin-table td{ border-bottom:1px solid var(--border-soft); padding:12px 14px; }
+  .admin-table td:last-child{ border-bottom:none; }
+  .admin-table td::before{ content:attr(data-label); display:block; font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:6px; }
+  .admin-actions-stack{ gap:8px; }
+  .admin-rank-select{ min-width:0; }
+}
+
 @media (max-width:600px){
   .admin-table{ font-size:.78rem; }
   header{ padding:14px 16px; }

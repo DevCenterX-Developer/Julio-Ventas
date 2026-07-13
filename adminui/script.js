@@ -325,7 +325,7 @@ function initDeniedView(){
 function renderTable(list){
   const tbody = $('usersTbody');
   if (list.length === 0){
-    tbody.innerHTML = `<tr><td colspan="6" class="empty">Sin resultados</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="empty">Sin resultados</td></tr>`;
     return;
   }
   tbody.innerHTML = '';
@@ -335,33 +335,33 @@ function renderTable(list){
     const rankValue = String(u.rank || 'BRONCE').toUpperCase();
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${escapeHtml(u.email || '(sin correo)')}</td>
-      <td>${u.isAdmin
+      <td data-label="Correo">${escapeHtml(u.email || '(sin correo)')}</td>
+      <td data-label="Rol">${u.isAdmin
         ? `<span class="role-tag admin">${svg('shield',13)} Admin</span>`
         : `<span class="role-tag user">${svg('user',13)} Usuario</span>`}</td>
-      <td>
+      <td data-label="APK">
         <div class="admin-balance-field">
           <div class="admin-balance-pill">Saldo actual: ${apkValue}</div>
           <button class="iconbtn gear-btn" data-edit-keys="${u.id}:apk" type="button" title="Ajustar rápido APK">${svg('settings',14)}<span>Ajustar</span></button>
         </div>
       </td>
-      <td>
+      <td data-label="Proxy">
         <div class="admin-balance-field">
           <div class="admin-balance-pill">Saldo actual: ${proxyValue}</div>
           <button class="iconbtn gear-btn" data-edit-keys="${u.id}:proxy" type="button" title="Ajustar rápido Proxy">${svg('settings',14)}<span>Ajustar</span></button>
         </div>
       </td>
-      <td>
-        <select class="client-input" data-rank-select="${u.id}" data-current-rank="${rankValue}">
-          <option value="BRONCE" ${rankValue === 'BRONCE' ? 'selected' : ''}>Bronce</option>
-          <option value="PLATA" ${rankValue === 'PLATA' ? 'selected' : ''}>Plata</option>
-          <option value="ORO" ${rankValue === 'ORO' ? 'selected' : ''}>Oro</option>
-          <option value="DIAMANTE" ${rankValue === 'DIAMANTE' ? 'selected' : ''}>Diamante</option>
-          <option value="HEROICO" ${rankValue === 'HEROICO' ? 'selected' : ''}>Heroico</option>
-        </select>
-      </td>
-      <td>
-        <button class="btn" data-save-rank="${u.id}" type="button">Guardar rango</button>
+      <td data-label="Acciones">
+        <div class="admin-actions-stack">
+          <select class="client-input admin-rank-select" data-rank-select="${u.id}" data-current-rank="${rankValue}">
+            <option value="BRONCE" ${rankValue === 'BRONCE' ? 'selected' : ''}>Bronce</option>
+            <option value="PLATA" ${rankValue === 'PLATA' ? 'selected' : ''}>Plata</option>
+            <option value="ORO" ${rankValue === 'ORO' ? 'selected' : ''}>Oro</option>
+            <option value="DIAMANTE" ${rankValue === 'DIAMANTE' ? 'selected' : ''}>Diamante</option>
+            <option value="HEROICO" ${rankValue === 'HEROICO' ? 'selected' : ''}>Heroico</option>
+          </select>
+          <button class="btn admin-rank-btn" data-save-rank="${u.id}" type="button">Guardar rango</button>
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
