@@ -123,6 +123,31 @@ function escapeHtml(str){
   }[c]));
 }
 
+function formatDateTime(value){
+  if (!value) return '—';
+  if (typeof value?.toDate === 'function') {
+    const date = value.toDate();
+    return date.toLocaleString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('es-ES', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
 // ---------------------------------------------------------------------
 // ESTADO
 // ---------------------------------------------------------------------
@@ -376,24 +401,61 @@ function renderClaimLinks(){
     list.innerHTML = '<div class="empty-card">No hay enlaces creados todavía.</div>';
     return;
   }
-  list.innerHTML = claimLinks.map(link => `
-    <div class="stack-item">
-      <div>
-        <div class="stack-title">${link.type.toUpperCase()} · ${formatDurationForType(link.type, link.duration)}</div>
-        <div class="stack-sub">${link.amount} keys · ${escapeHtml(link.code)}</div>
+  list.innerHTML = claimLinks.map(link => {
+    const statusLabel = link.claimed ? 'Reclamado' : 'Pendiente';
+    const statusClass = link.claimed ? 'claimed' : 'pending';
+    const userLabel = link.claimedByEmail || link.claimedBy || '—';
+    const claimedAtLabel = link.claimedAtLabel || '—';
+    const createdAtLabel = link.createdAtLabel || '—';
+    return `
+      <div class="stack-item">
+        <div>
+          <div class="stack-title">${escapeHtml(String(link.type || '').toUpperCase())} · ${escapeHtml(formatDurationForType(link.type, link.duration))}</div>
+          <div class="stack-sub">${link.amount} keys · ${escapeHtml(link.code)}</div>
+          <div class="stack-sub"><span class="role-tag ${statusClass}">${statusLabel}</span></div>
+          ${link.claimed ? `
+            <div class="stack-sub">Reclamado por: ${escapeHtml(userLabel)}</div>
+            <div class="stack-sub">Hora: ${escapeHtml(claimedAtLabel)}</div>
+            <div class="stack-sub">Creado: ${escapeHtml(createdAtLabel)}</div>
+          ` : `
+            <div class="stack-sub">Aún no ha sido reclamado.</div>
+          `}
+        </div>
+        <div class="stack-actions">
+          <button data-copy-link="${link.id}">Copiar</button>
+          <button data-edit-link="${link.id}">Editar</button>
+          <button data-delete-link="${link.id}">Eliminar</button>
+        </div>
       </div>
-      <div class="stack-actions">
-        <button data-copy-link="${link.id}">Copiar</button>
-        <button data-edit-link="${link.id}">Editar</button>
-        <button data-delete-link="${link.id}">Eliminar</button>
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 async function loadClaimLinks(){
   const snap = await getDocs(collection(db, 'claimLinks'));
-  claimLinks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const rawLinks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const userCache = new Map();
+  allUsers.forEach(user => userCache.set(user.id, user));
+  const missingUserIds = [...new Set(rawLinks.filter(link => link.claimed && link.claimedBy).map(link => link.claimedBy))]
+    .filter(userId => !userCache.has(userId));
+  if (missingUserIds.length) {
+    const userDocs = await Promise.all(missingUserIds.map(async (userId) => {
+      const userSnap = await getDoc(doc(db, 'users', userId));
+      return userSnap.exists() ? { id: userId, ...userSnap.data() } : null;
+    }));
+    userDocs.filter(Boolean).forEach(user => userCache.set(user.id, user));
+    allUsers = [...allUsers.filter(user => !userDocs.some(found => found?.id === user.id)), ...userDocs.filter(Boolean)]
+      .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+  }
+  claimLinks = rawLinks.map(link => {
+    const user = link.claimedBy ? userCache.get(link.claimedBy) : null;
+    return {
+      ...link,
+      claimedByEmail: user?.email || link.claimedByEmail || '',
+      claimedAtLabel: formatDateTime(link.claimedAt),
+      createdAtLabel: formatDateTime(link.createdAt)
+    };
+  });
   renderClaimLinks();
 }
 

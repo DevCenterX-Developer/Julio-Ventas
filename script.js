@@ -1173,15 +1173,26 @@ function initStoreView(){
   });
 }
 
+function formatClaimDurationLabel(durationDays = 0){
+  if (!durationDays) return 'sin límite';
+  if (durationDays === 1) return '1 día';
+  if (durationDays === 30) return '1 mes';
+  return `${durationDays} días`;
+}
+
 function buildClaimView(code = ''){
   return `
   <div class="auth-wrap">
     <div class="auth-card">
       <div class="auth-logo">${iconBox('key',22)} Reclamar Keys</div>
-      <p class="auth-sub">Tu enlace de reclamo te dará APK o Proxy directamente en tu cuenta de Julio Ventas.</p>
+      <p class="auth-sub">Tu enlace de reclamo se añadirá automáticamente a tu cuenta de Julio Ventas.</p>
       <div class="field">
         <label>Código de reclamo</label>
         <div class="input-group">${svg('key',18)}<input id="claimCodeInput" value="${escapeHtml(code)}" placeholder="Código del enlace"></div>
+      </div>
+      <div class="auth-tabs">
+        <button type="button" id="claimTabLogin" class="active">Iniciar sesión</button>
+        <button type="button" id="claimTabRegister">Crear cuenta</button>
       </div>
       <form id="claimAuthForm">
         <div class="field">
@@ -1192,7 +1203,7 @@ function buildClaimView(code = ''){
           <label>Contraseña</label>
           <div class="input-group">${svg('lock',18)}<input type="password" id="claimPassword" required autocomplete="current-password"></div>
         </div>
-        <button type="submit" class="btn">${svg('check',18)} Reclamar ahora</button>
+        <button type="submit" class="btn" id="claimSubmitBtn"><span id="claimSubmitContent">${svg('check',18)} Reclamar ahora</span></button>
       </form>
       <div class="auth-msg" id="claimMsg"></div>
       <div class="auth-footer"><a href="/">Volver a la tienda</a></div>
@@ -1258,7 +1269,7 @@ async function claimLink(code, uid){
       date: new Date().toLocaleString(),
       createdAt: serverTimestamp()
     });
-    return { amount, type: currentType };
+    return { amount, type: currentType, durationDays };
   });
 
   return result;
@@ -1268,6 +1279,21 @@ function initClaimView(){
   $('app').innerHTML = buildClaimView(currentClaimCode);
   const form = $('claimAuthForm');
   const msg = $('claimMsg');
+  const submitBtn = $('claimSubmitBtn');
+  const submitContent = $('claimSubmitContent');
+  let claimMode = 'login';
+
+  const setClaimMode = (mode) => {
+    claimMode = mode;
+    $('claimTabLogin').classList.toggle('active', mode === 'login');
+    $('claimTabRegister').classList.toggle('active', mode === 'register');
+    submitContent.innerHTML = (mode === 'login')
+      ? svg('check',18) + ' Iniciar sesión y reclamar'
+      : svg('plus',18) + ' Crear cuenta y reclamar';
+    msg.textContent = '';
+    msg.className = 'auth-msg';
+  };
+
   const runClaim = async (uid) => {
     const code = $('claimCodeInput').value.trim();
     if (!code) {
@@ -1278,29 +1304,56 @@ function initClaimView(){
     try {
       msg.className = 'auth-msg';
       msg.innerHTML = '<span class="spinner"></span> Procesando reclamo...';
+      submitBtn.disabled = true;
       const result = await claimLink(code, uid);
       msg.className = 'auth-msg ok';
-      msg.innerHTML = svg('check',16) + ` ¡${result.amount} ${result.type.toUpperCase()} reclamadas correctamente!`;
+      msg.innerHTML = svg('check',16) + ` Se añadió ${result.amount} key ${result.type.toUpperCase()} por ${formatClaimDurationLabel(result.durationDays)} a tu cuenta.`;
     } catch (err) {
       msg.className = 'auth-msg error';
       msg.innerHTML = svg('alert',16) + ' ' + (err.message || 'No se pudo reclamar.');
+    } finally {
+      submitBtn.disabled = false;
     }
   };
 
+  $('claimTabLogin').addEventListener('click', () => setClaimMode('login'));
+  $('claimTabRegister').addEventListener('click', () => setClaimMode('register'));
+
   if (currentUser && currentClaimCode) {
-    runClaim(currentUser.uid);
+    msg.className = 'auth-msg';
+    msg.innerHTML = '<span class="spinner"></span> Detectamos tu sesión activa. Se está añadiendo el reclamo a tu cuenta...';
+    void runClaim(currentUser.uid);
+  } else {
+    setClaimMode('login');
+    msg.className = 'auth-msg';
+    msg.innerHTML = 'Inicia sesión o crea una cuenta para recibir tus keys.';
   }
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const email = $('claimEmail').value.trim();
     const password = $('claimPassword').value;
+    const submitBtnLocal = $('claimSubmitBtn');
+    msg.className = 'auth-msg';
+    msg.innerHTML = '<span class="spinner"></span> Procesando...';
+    submitBtnLocal.disabled = true;
     try {
-      const cred = await signInWithEmailAndPassword(auth, email, password);
+      let cred;
+      if (claimMode === 'login') {
+        cred = await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        cred = await createUserWithEmailAndPassword(auth, email, password);
+      }
+      const ref = doc(db, 'users', cred.user.uid);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        await setDoc(ref, { email, apkKeys:0, proxyKeys:0, keys:0, isAdmin:false, createdAt: serverTimestamp() });
+      }
       await runClaim(cred.user.uid);
     } catch (err) {
       msg.className = 'auth-msg error';
-      msg.innerHTML = svg('alert',16) + ' ' + (err.message || 'No se pudo iniciar sesión.');
+      msg.innerHTML = svg('alert',16) + ' ' + (err.message || 'No se pudo completar la autenticación.');
+      submitBtnLocal.disabled = false;
     }
   });
 }
