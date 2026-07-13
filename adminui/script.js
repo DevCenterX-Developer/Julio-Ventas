@@ -515,8 +515,15 @@ async function importProductsFromJson(){
   }
 
   try {
-    const parsed = JSON.parse(raw);
-    const list = Array.isArray(parsed) ? parsed : [parsed];
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (firstError) {
+      parsed = Function(`"use strict"; return (${raw});`)();
+    }
+
+    const sourceList = Array.isArray(parsed) ? parsed : (parsed && typeof parsed === 'object' && Array.isArray(parsed.products) ? parsed.products : [parsed]);
+    const list = sourceList.filter(item => item && typeof item === 'object');
     if (!list.length) {
       msg.className = 'auth-msg error';
       msg.textContent = 'El JSON no contiene productos.';
