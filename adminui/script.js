@@ -503,6 +503,63 @@ async function deleteProduct(id){
   await loadProducts();
 }
 
+async function importProductsFromJson(){
+  const input = $('productJsonInput');
+  const msg = $('productImportMsg');
+  if (!input || !msg) return;
+  const raw = String(input.value || '').trim();
+  if (!raw) {
+    msg.className = 'auth-msg error';
+    msg.textContent = 'Pega un JSON antes de importar.';
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    const list = Array.isArray(parsed) ? parsed : [parsed];
+    if (!list.length) {
+      msg.className = 'auth-msg error';
+      msg.textContent = 'El JSON no contiene productos.';
+      return;
+    }
+
+    const validProducts = list.filter(item => item && typeof item === 'object' && item.name);
+    if (!validProducts.length) {
+      msg.className = 'auth-msg error';
+      msg.textContent = 'No se encontraron productos válidos.';
+      return;
+    }
+
+    msg.className = 'auth-msg';
+    msg.innerHTML = '<span class="spinner"></span> Importando productos...';
+
+    const batch = [];
+    validProducts.forEach((item) => {
+      const payload = {
+        name: String(item.name || '').trim(),
+        image: String(item.image || '').trim(),
+        cost: Number(item.cost || 0),
+        currency: String(item.currency || 'apk').toLowerCase(),
+        tier: String(item.tier || '').trim(),
+        icon: String(item.icon || '').trim(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      batch.push(addDoc(collection(db, 'products'), payload));
+    });
+
+    await Promise.all(batch);
+    input.value = '';
+    msg.className = 'auth-msg ok';
+    msg.textContent = `${validProducts.length} producto(s) importado(s) correctamente.`;
+    await loadProducts();
+  } catch (error) {
+    console.error('No se pudieron importar los productos:', error);
+    msg.className = 'auth-msg error';
+    msg.textContent = 'El JSON no es válido o falló la importación.';
+  }
+}
+
 // ---------------------------------------------------------------------
 // MODAL: EDITAR KEYS
 // ---------------------------------------------------------------------
@@ -563,6 +620,7 @@ function wirePanelEvents(){
   $('createClaimBtn').addEventListener('click', createClaimLink);
   $('createCodeBtn').addEventListener('click', createPromoCode);
   $('createProductBtn').addEventListener('click', createProduct);
+  $('importProductsBtn').addEventListener('click', importProductsFromJson);
   $('claimTypeSelect').addEventListener('change', () => populateDurationSelects());
   $('codeTypeSelect').addEventListener('change', () => populateDurationSelects());
   $('codeAmountInput').addEventListener('input', () => renderCodeValueFields(Number($('codeAmountInput').value) || 1));
